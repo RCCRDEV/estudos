@@ -9,6 +9,7 @@
 
 <body>
 
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="Alternar tema">🌗</button>
 <div class="container">
 
 <!-- Sidebar -->
@@ -29,25 +30,16 @@
 
 <h1>Minhas Matérias</h1>
 
-<div class="subjects">
-
-<div class="card">
-<h3>Programação</h3>
-<p>5 aulas</p>
-<button>Estudar</button>
+<div class="login-box" style="max-width:520px;margin:20px 0;">
+  <h2 style="margin:0 0 12px 0;">Criar nova matéria</h2>
+  <input id="subject-name" placeholder="Nome da matéria">
+  <input id="subject-desc" placeholder="Descrição (opcional)">
+  <button onclick="createSubject()">Criar</button>
 </div>
 
-<div class="card">
-<h3>Matemática</h3>
-<p>8 aulas</p>
-<button>Estudar</button>
-</div>
+<div id="subjects" class="subjects">
 
-<div class="card">
-<h3>Inglês</h3>
-<p>10 aulas</p>
-<button>Estudar</button>
-</div>
+<!-- Lista gerada via JS -->
 
 </div>
 
@@ -55,5 +47,6 @@
 
 </div>
 
+<script src="js/script.js"></script>
 </body>
 </html>
