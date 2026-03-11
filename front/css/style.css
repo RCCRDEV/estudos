@@ -30,6 +30,14 @@ padding:0;
 .sidebar li{
 margin:15px 0;
 cursor:pointer;
+padding:8px 10px;
+border-radius:6px;
+transition:background .2s ease,color .2s ease;
+}
+
+.sidebar li:hover{
+background:#353b48;
+color:#f5f6fa;
 }
 
 /* Conteúdo */
@@ -42,6 +50,7 @@ padding:40px;
 .subjects{
 display:flex;
 gap:20px;
+flex-wrap:wrap;
 }
 
 .card{
@@ -50,6 +59,12 @@ padding:20px;
 border-radius:10px;
 width:200px;
 box-shadow:0 5px 10px rgba(0,0,0,0.1);
+transition:transform .15s ease, box-shadow .15s ease;
+}
+
+.card:hover{
+transform:translateY(-2px);
+box-shadow:0 8px 16px rgba(0,0,0,0.12);
 }
 
 .card button{
@@ -59,6 +74,21 @@ padding:10px;
 border-radius:5px;
 cursor:pointer;
 color:white;
+width:100%;
+margin-top:10px;
+transition:background .2s ease, transform .05s ease;
+}
+
+.card button:hover{
+background:#44bd32;
+}
+
+.card h3{
+margin:0 0 6px 0;
+}
+
+.card p{
+margin:0 0 8px 0;
 }
 
 
@@ -137,6 +167,11 @@ color:white;
 border-radius:5px;
 cursor:pointer;
 font-size:16px;
+transition:background .2s ease, transform .05s ease;
+}
+
+.login-box button:active{
+transform:scale(0.98);
 }
 
 .login-box button:hover{
@@ -146,4 +181,17 @@ background:#3a8de0;
 .login-box p{
 margin-top:10px;
 font-size:14px;
+}
+
+@media (max-width: 800px){
+  .container{
+    flex-direction:column;
+  }
+  .left{
+    min-height:220px;
+    padding:24px;
+  }
+  .content{
+    padding:24px;
+  }
 }

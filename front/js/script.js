@@ -1,28 +1,22 @@
-function login(){
-
-const email = document.getElementById("email").value
-const senha = document.getElementById("senha").value
-
-console.log(email, senha)
-
-}
-
-
-
-async function register() {
-  const nome = document.getElementById("nome").value;
+async function login() {
   const email = document.getElementById("email").value;
   const senha = document.getElementById("senha").value;
-
-  if (!nome || !email || !senha) {
-    alert("Por favor, preencha todos os campos.");
+  if (!email || !senha) {
+    alert("Informe email e senha.");
     return;
   }
-
-  // Aqui, por enquanto, só um alert simples:
-  alert(`Cadastro efetuado para ${nome} (${email})`);
-
-  // Depois, conectaremos com o backend para salvar no banco.
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, senha }),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    localStorage.setItem("token", data.token);
+    window.location.href = "dashboard.html";
+  } else {
+    alert(data.message || "Falha no login.");
+  }
 }
 
 async function register() {
@@ -35,7 +29,7 @@ async function register() {
     return;
   }
 
-  const res = await fetch("http://localhost:3000/api/register", {
+  const res = await fetch("/api/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ nome, email, senha }),
