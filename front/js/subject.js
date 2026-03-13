@@ -1,4 +1,24 @@
-function authHeaders(){const t=localStorage.getItem("token");return{Authorization:`Bearer ${t}`}}
+function authHeaders(){
+  const t=localStorage.getItem("token");
+  if(!t) {
+    console.error("Token ausente!");
+    window.location.href = "login.html";
+    return {};
+  }
+  return{Authorization:`Bearer ${t}`}
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = { ...authHeaders(), ...(options.headers || {}) };
+  const res = await fetch(url, { ...options, headers });
+  if (res && res.status === 401) {
+    alert("Sessão expirada. Faça login novamente.");
+    localStorage.removeItem("token");
+    window.location.href = "login.html";
+    return null;
+  }
+  return res;
+}
 function getId(){const u=new URLSearchParams(location.search);return u.get("id")}
 function setTheme(theme){if(theme==="light"){document.documentElement.setAttribute("data-theme","light");}else{document.documentElement.removeAttribute("data-theme");}localStorage.setItem("theme",theme);}
 function toggleTheme(){const cur=localStorage.getItem("theme")==="light"?"dark":"light";setTheme(cur);}
@@ -173,17 +193,16 @@ async function savePage(){
   const title=document.getElementById("n-title").value.trim();
   const content=document.getElementById("n-content").value.trim();
   if(!title||!content){alert("Preencha título e conteúdo");return}
+  const id=getId();
   if(notesState.creating || notesState.i<0){
-    const id=getId();
-    const r=await fetch(`/api/subjects/${id}/notes`,{method:"POST",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({title,content})});
-    if(r.ok){ notesState.creating=false; notesState.editing=false; await loadNotes(); notesState.i=notesState.items.length?notesState.items.length-1:-1; renderNotePage(); }
-    else { alert("Erro ao salvar") }
+    const r=await apiFetch(`/api/subjects/${id}/notes`,{method:"POST",headers:{ "Content-Type":"application/json"},body:JSON.stringify({title,content})});
+    if(r && r.ok){ notesState.creating=false; notesState.editing=false; await loadNotes(); notesState.i=notesState.items.length?notesState.items.length-1:-1; renderNotePage(); }
+    else if(r) { alert("Erro ao salvar") }
     return;
   }
   const cur=notesState.items[notesState.i];
-  const id=getId();
-  const r=await fetch(`/api/subjects/${id}/notes/${cur._id}`,{method:"PUT",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({title,content})});
-  if(r.ok){notesState.editing=false; await loadNotes();} else {alert("Erro ao salvar")}
+  const r=await apiFetch(`/api/subjects/${id}/notes/${cur._id}`,{method:"PUT",headers:{ "Content-Type":"application/json"},body:JSON.stringify({title,content})});
+  if(r && r.ok){notesState.editing=false; await loadNotes();} else if(r) {alert("Erro ao salvar")}
 }
 async function deletePage(){
   if(notesState.i<0) return;
@@ -325,6 +344,244 @@ async function deleteActivity(activityId){
 }
 function prevMonth(){calState.month--; if(calState.month<0){calState.month=11;calState.year--;} renderCalendar();}
 function nextMonth(){calState.month++; if(calState.month>11){calState.month=0;calState.year++;} renderCalendar();}
+const weeklyState = {
+  weekStart: null, // Domingo da semana atual
+  data: [] // Agora centralizado do Planner
+};
+
+function getStartOfWeek(d) {
+  const date = new Date(d);
+  const day = date.getDay(); // 0 (Dom) a 6 (Sab)
+  const start = new Date(date.setDate(date.getDate() - day));
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function changeWeek(diff) {
+  const newStart = new Date(weeklyState.weekStart);
+  newStart.setDate(newStart.getDate() + (diff * 7));
+  weeklyState.weekStart = newStart;
+  loadWeeklyTab();
+}
+
+async function loadWeeklyTab() {
+  if (!weeklyState.weekStart) weeklyState.weekStart = getStartOfWeek(new Date());
+  
+  const start = weeklyState.weekStart;
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+
+  const rangeLabel = document.getElementById("weekly-range-label");
+  if (rangeLabel) {
+    const options = { day: 'numeric', month: 'short' };
+    rangeLabel.textContent = `${start.toLocaleDateString('pt-BR', options)} - ${end.toLocaleDateString('pt-BR', options)}`;
+  }
+
+  await Promise.all([loadPlannerData(), loadGlobalStats()]);
+}
+
+async function loadGlobalStats() {
+  const id = getId();
+  const r = await fetch(`/api/subjects/${id}/study-stats`, { headers: authHeaders() });
+  if (!r.ok) return;
+  const stats = await r.json();
+  const avgEl = document.getElementById("global-avg-hours");
+  const totalEl = document.getElementById("global-total-hours");
+  if(avgEl) avgEl.textContent = `${(stats.avg || 0).toFixed(1)}h`;
+  if(totalEl) totalEl.textContent = `${(stats.total || 0).toFixed(1)}h`;
+  
+  const quickDate = document.getElementById("quick-date-input");
+  if (quickDate && !quickDate.value) {
+    quickDate.value = new Date().toISOString().split('T')[0];
+  }
+}
+
+async function loadPlannerData() {
+  const id = getId();
+  const start = weeklyState.weekStart;
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+
+  const r = await apiFetch(`/api/subjects/${id}/planner?start=${start.toISOString()}&end=${end.toISOString()}`);
+  if (!r || !r.ok) return;
+  weeklyState.data = await r.json();
+  renderWeeklyAgenda();
+}
+
+async function saveQuickStudyLog() {
+  const dateInput = document.getElementById("quick-date-input");
+  const hoursInput = document.getElementById("today-hours-input");
+  
+  const dateStr = dateInput.value;
+  const hours = parseFloat(hoursInput.value) || 0;
+  
+  if (!dateStr) { alert("Selecione uma data"); return; }
+  if (hours < 0) return;
+  
+  // Criar data local a partir do input yyyy-mm-dd
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  
+  await saveStudyLog(date.toISOString(), hours);
+  hoursInput.value = "";
+}
+
+function renderWeeklyAgenda() {
+  const grid = document.getElementById("weekly-agenda-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const dayNames = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  let totalHours = 0;
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weeklyState.weekStart);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toDateString();
+    const isToday = dateStr === now.toDateString();
+    
+    const dayData = weeklyState.data.find(it => new Date(it.date).toDateString() === dateStr) || { hours: 0, tasks: [] };
+    const hours = dayData.hours || 0;
+    totalHours += hours;
+
+    const cell = document.createElement("div");
+    cell.className = `planner-day ${isToday ? 'today' : ''}`;
+
+    cell.innerHTML = `
+      <div class="day-info">
+        <span class="day-title">${dayNames[i]}</span>
+        <span class="day-num">${d.getDate()}/${d.getMonth() + 1}</span>
+      </div>
+      
+      <div class="hours-badge-input">
+        <label>Horas de Estudo</label>
+        <input type="number" step="0.5" min="0" value="${hours}" class="h-input"
+          onchange="saveStudyLog('${d.toISOString()}', this.value)">
+      </div>
+
+      <div class="checklist-title">Checklist</div>
+      <div class="tasks-container">
+        ${(dayData.tasks || []).map(t => `
+          <div class="t-item">
+            <button class="t-status-btn" onclick="cycleTaskStatus('${d.toISOString()}', '${t._id}', '${t.status}')" title="Mudar status">
+              ${getStatusIcon(t.status)}
+            </button>
+            <span class="t-text status-${t.status.split(' ').join('-')}" title="${t.title}">${t.title}</span>
+            <button class="t-del" onclick="deleteWeeklyTask('${d.toISOString()}', '${t._id}')" title="Excluir">×</button>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="add-t-wrapper">
+        <input id="add-task-${i}" placeholder="Add tarefa..." class="add-t-input" onkeyup="if(event.key==='Enter') addWeeklyTaskAt(${i})">
+        <button class="add-t-btn" onclick="addWeeklyTaskAt(${i})">+</button>
+      </div>
+    `;
+    grid.appendChild(cell);
+    
+    if (isToday) {
+      const todayInput = document.getElementById("today-hours-input");
+      if (todayInput && !todayInput.value) todayInput.placeholder = hours;
+    }
+  }
+
+  document.getElementById("weekly-total-hours").textContent = totalHours.toFixed(1);
+  document.getElementById("weekly-avg-hours").textContent = (totalHours / 7).toFixed(1);
+}
+
+function getStatusIcon(status) {
+  switch(status) {
+    case 'concluido': return '✅';
+    case 'em andamento': return '🚀';
+    case 'procrastinado': return '💤';
+    default: return '⏳';
+  }
+}
+
+async function cycleTaskStatus(date, taskId, currentStatus) {
+  const statuses = ["nao feito", "em andamento", "concluido", "procrastinado"];
+  let nextIdx = (statuses.indexOf(currentStatus) + 1) % statuses.length;
+  await updateWeeklyTaskStatus(date, taskId, statuses[nextIdx]);
+}
+
+async function saveStudyLog(date, hours) {
+  const id = getId();
+  const h = parseFloat(hours) || 0;
+  
+  const rangeLabel = document.getElementById("weekly-range-label");
+  const originalText = rangeLabel ? rangeLabel.textContent : "";
+  if (rangeLabel) {
+    rangeLabel.textContent = "Salvando...";
+    rangeLabel.style.color = "var(--accent)";
+  }
+
+  const r = await apiFetch(`/api/subjects/${id}/planner/hours`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date, hours: h })
+  });
+  
+  if (r && r.ok) {
+    await Promise.all([loadPlannerData(), loadGlobalStats()]);
+    if (rangeLabel) {
+      rangeLabel.textContent = "Salvo!";
+      setTimeout(() => {
+        rangeLabel.textContent = originalText;
+        rangeLabel.style.color = "";
+      }, 1000);
+    }
+  } else if (r) {
+    if (rangeLabel) {
+      rangeLabel.textContent = "Erro ao salvar";
+      rangeLabel.style.color = "var(--danger-alt)";
+    }
+  }
+}
+
+async function addWeeklyTaskAt(dayIndex) {
+  const input = document.getElementById(`add-task-${dayIndex}`);
+  const title = input.value.trim();
+  if (!title) return;
+
+  const date = new Date(weeklyState.weekStart);
+  date.setDate(date.getDate() + dayIndex);
+
+  const id = getId();
+  const r = await apiFetch(`/api/subjects/${id}/planner/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, date: date.toISOString() })
+  });
+
+  if (r && r.ok) {
+    input.value = "";
+    loadPlannerData();
+  }
+}
+
+async function updateWeeklyTaskStatus(date, taskId, status) {
+  const id = getId();
+  await apiFetch(`/api/subjects/${id}/planner/tasks/${taskId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date, status })
+  });
+  loadPlannerData();
+}
+
+async function deleteWeeklyTask(date, taskId) {
+  if (!confirm("Excluir tarefa?")) return;
+  const id = getId();
+  await apiFetch(`/api/subjects/${id}/planner/tasks/${taskId}?date=${date}`, {
+    method: "DELETE"
+  });
+  loadPlannerData();
+}
+
 function initTabs(){
   const tabs=document.querySelectorAll(".tab");
   tabs.forEach(t=>t.addEventListener("click",()=>{
@@ -333,6 +590,7 @@ function initTabs(){
     const id=t.getAttribute("data-tab");
     document.querySelectorAll(".tab-content").forEach(c=>c.classList.remove("active"));
     document.getElementById(`tab-${id}`).classList.add("active");
+    if(id === "weekly") loadWeeklyTab();
   }));
 }
 async function saveTestResult(correct,total){
@@ -360,7 +618,15 @@ async function loadTests(){
     });
   }
 }
-document.addEventListener("DOMContentLoaded",()=>{initTabs();loadSubject();loadFlashcards();loadVideos();loadNotes();loadActivities();loadTests();renderFlashcardTrainer();});
+document.addEventListener("DOMContentLoaded",()=>{
+  const id = getId();
+  if(!id) {
+    alert("ID da matéria não encontrado na URL!");
+    window.location.href = "dashboard.html";
+    return;
+  }
+  initTabs();loadSubject();loadFlashcards();loadVideos();loadNotes();loadActivities();loadTests();renderFlashcardTrainer();
+});
 function showResultModal(pct,passed){
   const modal=document.getElementById("result-modal");
   const txt=document.getElementById("result-text");

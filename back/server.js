@@ -12,7 +12,7 @@ app.use(express.json());
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/estudos";
 
 app.use((req, _res, next) => {
-  console.log(`${req.method} ${req.url}`);
+  console.log(`${req.method} ${req.url} - Auth: ${req.headers.authorization ? 'Sim' : 'Não'}`);
   next();
 });
 
@@ -45,4 +45,12 @@ app.get("/dashboard", (req, res) => {
 
 app.listen(3000, () => {
   console.log("Servidor rodando na porta 3000");
+});
+
+process.on('unhandledRejection', (reason, p) => {
+  console.error('Unhandled Rejection at:', p, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
 });

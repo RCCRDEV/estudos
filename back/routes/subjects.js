@@ -6,6 +6,7 @@ const Note = require("../models/Note");
 const Video = require("../models/Video");
 const Activity = require("../models/Activity");
 const TestResult = require("../models/TestResult");
+const Planner = require("../models/Planner");
 const auth = require("../middleware/auth");
 const multer = require("multer");
 const path = require("path");
@@ -360,6 +361,128 @@ router.post("/:id/tests", async (req, res) => {
     console.error("Erro salvar teste", e);
     res.status(500).json({ message: "Erro ao salvar teste" });
   }
+});
+
+// --- Planner (Horas e Checklist unificado) ---
+
+router.get("/:id/study-stats", async (req, res) => {
+  try {
+    const agg = await Planner.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.user.id), subjectId: new mongoose.Types.ObjectId(req.params.id) } },
+      { $group: { _id: null, avg: { $avg: "$hours" }, total: { $sum: "$hours" }, count: { $sum: 1 } } }
+    ]);
+    const stats = agg.length ? { avg: agg[0].avg, total: agg[0].total, count: agg[0].count } : { avg: 0, total: 0, count: 0 };
+    res.json(stats);
+  } catch (e) {
+    console.error("Erro stats estudo", e);
+    res.status(500).json({ message: "Erro ao buscar estatísticas" });
+  }
+});
+
+router.get("/:id/planner", async (req, res) => {
+  try {
+    const { start, end } = req.query;
+    const query = { userId: req.user.id, subjectId: req.params.id };
+    if (start && end) {
+      query.date = { $gte: new Date(start), $lte: new Date(end) };
+    }
+    const items = await Planner.find(query).sort({ date: 1 });
+    res.json(items);
+  } catch (e) {
+    console.error("Erro ao carregar planner", e);
+    res.status(500).json({ message: "Erro ao carregar planner" });
+  }
+});
+
+router.post("/:id/planner/hours", async (req, res) => {
+  try {
+    const { date, hours } = req.body;
+    const subjectId = req.params.id;
+    const userId = req.user.id;
+
+    if (!date || hours === undefined) return res.status(400).json({ message: "Dados incompletos" });
+
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+
+    const result = await Planner.findOneAndUpdate(
+      { userId, subjectId, date: d },
+      { hours: Number(hours) },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json(result);
+  } catch (e) {
+    console.error("Erro ao salvar horas", e);
+    res.status(500).json({ message: "Erro ao salvar horas" });
+  }
+});
+
+router.post("/:id/planner/tasks", async (req, res) => {
+  try {
+    const { date, title } = req.body;
+    const subjectId = req.params.id;
+    const userId = req.user.id;
+
+    if (!date || !title) return res.status(400).json({ message: "Dados incompletos" });
+
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+
+    const result = await Planner.findOneAndUpdate(
+      { userId, subjectId, date: d },
+      { $push: { tasks: { title, status: "nao feito" } } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json(result);
+  } catch (e) {
+    console.error("Erro ao adicionar tarefa", e);
+    res.status(500).json({ message: "Erro ao adicionar tarefa" });
+  }
+});
+
+router.put("/:id/planner/tasks/:taskId", async (req, res) => {
+  try {
+    const { date, status } = req.body;
+    const { taskId } = req.params;
+    const userId = req.user.id;
+
+    const result = await Planner.findOneAndUpdate(
+      { userId, date: new Date(date), "tasks._id": taskId },
+      { $set: { "tasks.$.status": status } },
+      { new: true }
+    );
+
+    res.json(result);
+  } catch (e) {
+    console.error("Erro ao atualizar status", e);
+    res.status(500).json({ message: "Erro ao atualizar status" });
+  }
+});
+
+router.delete("/:id/planner/tasks/:taskId", async (req, res) => {
+  try {
+    const { date } = req.query;
+    const { taskId } = req.params;
+    const userId = req.user.id;
+
+    const result = await Planner.findOneAndUpdate(
+      { userId, date: new Date(date) },
+      { $pull: { tasks: { _id: taskId } } },
+      { new: true }
+    );
+
+    res.json(result);
+  } catch (e) {
+    console.error("Erro ao excluir tarefa", e);
+    res.status(500).json({ message: "Erro ao excluir tarefa" });
+  }
+});
+
+router.use((req, res) => {
+  console.log("ROTA NÃO ENCONTRADA EM SUBJECTS:", req.method, req.url);
+  res.status(404).json({ message: "Rota não encontrada em subjects" });
 });
 
 module.exports = router;

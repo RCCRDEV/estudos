@@ -28,6 +28,7 @@
         <div class="tab" data-tab="videos">Vídeos</div>
         <div class="tab" data-tab="notes">Anotações</div>
         <div class="tab" data-tab="activities">Atividades</div>
+        <div class="tab" data-tab="weekly">Semanal</div>
       </div>
 
       <div id="tab-flashcards" class="tab-content active">
@@ -129,6 +130,57 @@
           <div class="login-box" style="max-width:780px">
             <h2 style="margin:0 0 12px 0;">Lembretes</h2>
             <div id="reminders" class="row"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-weekly" class="tab-content">
+        <div class="weekly-container">
+          <!-- Header da Semana Premium -->
+          <div class="weekly-header">
+            <div style="display:flex; gap: 15px; align-items: center;">
+              <button class="nav-btn" onclick="changeWeek(-1)" title="Semana Anterior">◀</button>
+              <span id="weekly-range-label" class="range-label"></span>
+              <button class="nav-btn" onclick="changeWeek(1)" title="Próxima Semana">▶</button>
+            </div>
+            
+            <div style="display:flex; gap: 25px; align-items: center;">
+              <div style="text-align: right;">
+                <div class="stat-lab-new">Total Semana</div>
+                <div class="stat-val-new" style="color: var(--accent);"><span id="weekly-total-hours">0</span>h</div>
+              </div>
+              <div style="text-align: right;">
+                <div class="stat-lab-new">Média Semana</div>
+                <div class="stat-val-new" style="color: var(--accent);"><span id="weekly-avg-hours">0</span>h</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Estatísticas Globais Premium -->
+          <div class="stats-grid">
+            <div class="stat-card-new">
+              <div class="stat-val-new" id="global-avg-hours">0.0h</div>
+              <div class="stat-lab-new">Média Geral</div>
+            </div>
+            <div class="stat-card-new">
+              <div class="stat-val-new" id="global-total-hours">0h</div>
+              <div class="stat-lab-new">Total Acumulado</div>
+            </div>
+            <div class="stat-card-new accent-bg">
+              <div class="stat-lab-new" style="margin-bottom: 8px; color: var(--text);">Registrar Estudo</div>
+              <div style="display:flex; gap: 8px; justify-content: center; flex-direction: column; align-items: center;">
+                <input type="date" id="quick-date-input" class="h-input" style="width: 140px; height: 34px; font-size: 12px; margin-bottom: 5px;">
+                <div style="display:flex; gap: 5px;">
+                  <input type="number" id="today-hours-input" step="0.5" min="0" placeholder="Horas" class="h-input" style="width: 80px; height: 40px;">
+                  <button class="add-t-btn" onclick="saveQuickStudyLog()" style="border-radius: 10px; width: 40px; height: 40px;">✓</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Grid do Planner Semanal -->
+          <div id="weekly-agenda-grid" class="weekly-grid">
+            <!-- Gerado via JS: Domingo a Sábado -->
           </div>
         </div>
       </div>
