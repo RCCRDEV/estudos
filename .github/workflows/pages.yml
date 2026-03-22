@@ -22,6 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Gerar js/env.js com URL da API
+        working-directory: front
+        env:
+          V: ${{ vars.PUBLIC_API_URL }}
+          S: ${{ secrets.PUBLIC_API_URL }}
+        run: |
+          node -e "const fs=require('fs'); const u=(process.env.V||process.env.S||'').trim(); fs.writeFileSync('js/env.js','window.API_BASE='+JSON.stringify(u)+';\\n');"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

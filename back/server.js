@@ -6,7 +6,15 @@ const app = express();
 const usuariosRoutes = require("./routes/usuarios");
 const subjectsRoutes = require("./routes/subjects");
 
-app.use(cors());
+const PORT = Number(process.env.PORT) || 3000;
+
+app.use(
+  cors({
+    origin: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json());
 
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/estudos";
@@ -20,6 +28,10 @@ mongoose
   .connect(MONGO_URI)
   .then(() => console.log("MongoDB conectado"))
   .catch((err) => console.log("Erro ao conectar MongoDB:", err));
+
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true });
+});
 
 app.use("/api", usuariosRoutes);
 app.use("/api/subjects", subjectsRoutes);
@@ -43,8 +55,8 @@ app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "../front/dashboard.html"));
 });
 
-app.listen(3000, () => {
-  console.log("Servidor rodando na porta 3000");
+app.listen(PORT, () => {
+  console.log("Servidor rodando na porta " + PORT);
 });
 
 process.on('unhandledRejection', (reason, p) => {

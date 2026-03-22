@@ -10,7 +10,7 @@
     !(window.API_BASE && String(window.API_BASE).trim())
   ) {
     console.warn(
-      "StudyFlow: no GitHub Pages o backend não roda aqui. Preencha <meta name=\"api-base\" content=\"https://SEU-SERVIDOR\"> nos HTML (URL do Express em produção, sem barra no final)."
+      "StudyFlow: defina a variável PUBLIC_API_URL no GitHub (Settings → Secrets and variables → Actions → Variables) ou o secret PUBLIC_API_URL, depois rode o deploy do Pages. A URL deve ser a do backend (Render etc.), sem barra no final."
     );
   }
 })();

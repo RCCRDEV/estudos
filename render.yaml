@@ -1,0 +1,14 @@
+# Blueprint Render: cria um Web Service na pasta back.
+# Depois do deploy, copie a URL HTTPS (ex.: https://estudos-api-xxxx.onrender.com)
+# e cadastre em GitHub → Settings → Actions → Variables → PUBLIC_API_URL
+services:
+  - type: web
+    name: estudos-api
+    runtime: node
+    rootDir: back
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
