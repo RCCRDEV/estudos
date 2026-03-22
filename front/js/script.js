@@ -5,7 +5,7 @@ async function login() {
     alert("Informe email e senha.");
     return;
   }
-  const res = await fetch("/api/login", {
+  const res = await fetch(apiUrl("/api/login"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, senha }),
@@ -27,7 +27,7 @@ function authHeaders() {
 async function loadSubjects() {
   const list = document.getElementById("subjects");
   if (!list) return;
-  const res = await fetch("/api/subjects", { headers: authHeaders() });
+  const res = await fetch(apiUrl("/api/subjects"), { headers: authHeaders() });
   if (!res.ok) {
     if (res.status === 401) {
       window.location.href = "login.html";
@@ -60,7 +60,7 @@ async function createSubject() {
     alert("Informe o nome da matéria");
     return;
   }
-  const res = await fetch("/api/subjects", {
+  const res = await fetch(apiUrl("/api/subjects"), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ name, description }),
@@ -110,7 +110,7 @@ async function register() {
     return;
   }
 
-  const res = await fetch("/api/register", {
+  const res = await fetch(apiUrl("/api/register"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ nome, email, senha }),

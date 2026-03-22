@@ -10,7 +10,7 @@ function authHeaders(){
 
 async function apiFetch(url, options = {}) {
   const headers = { ...authHeaders(), ...(options.headers || {}) };
-  const res = await fetch(url, { ...options, headers });
+  const res = await fetch(apiUrl(url), { ...options, headers });
   if (res && res.status === 401) {
     alert("Sessão expirada. Faça login novamente.");
     localStorage.removeItem("token");
@@ -62,7 +62,7 @@ async function endSession(){fcState.inSession=false;const total=fcState.order.le
 async function loadSubject(){
   const id=getId(); if(!id) return;
   const title=document.getElementById("subject-title");
-  const resList=await fetch("/api/subjects",{headers:authHeaders()});
+  const resList=await fetch(apiUrl("/api/subjects"),{headers:authHeaders()});
   if(!resList.ok){title.textContent="Matéria";return}
   const items=await resList.json();
   const s=items.find(x=>x._id===id);
@@ -70,7 +70,7 @@ async function loadSubject(){
 }
 async function loadFlashcards(){
   const id=getId(); const wrap=document.getElementById("flashcards");
-  const r=await fetch(`/api/subjects/${id}/flashcards`,{headers:authHeaders()});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/flashcards`),{headers:authHeaders()});
   if(!r.ok){ if(wrap) wrap.innerHTML=""; return }
   const items=await r.json();
   if(wrap){ wrap.innerHTML=""; }
@@ -87,19 +87,19 @@ async function addFlashcard(){
   const front=document.getElementById("fc-front").value.trim();
   const back=document.getElementById("fc-back").value.trim();
   if(!front||!back){alert("Preencha pergunta e resposta");return}
-  const r=await fetch(`/api/subjects/${id}/flashcards`,{
+  const r=await fetch(apiUrl(`/api/subjects/${id}/flashcards`),{
     method:"POST",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({front,back})
   });
   if(r.ok){document.getElementById("fc-front").value="";document.getElementById("fc-back").value="";loadFlashcards()} else {alert("Erro")}
 }
 async function delFlashcard(fid){
   const id=getId();
-  const r=await fetch(`/api/subjects/${id}/flashcards/${fid}`,{method:"DELETE",headers:authHeaders()});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/flashcards/${fid}`),{method:"DELETE",headers:authHeaders()});
   if(r.ok){ loadFlashcards(); loadFlashcardsManager(); }
 }
 async function loadVideos(){
   const id=getId(); const wrap=document.getElementById("videos");
-  const r=await fetch(`/api/subjects/${id}/videos`,{headers:authHeaders()});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/videos`),{headers:authHeaders()});
   if(!r.ok){wrap.innerHTML="";return}
   const items=await r.json(); wrap.innerHTML="";
   items.forEach(v=>{
@@ -116,12 +116,12 @@ async function loadVideos(){
                     <button class="btn btn-wrong" data-del="${v._id}">Excluir</button>
                   </div>`;
     el.querySelector("[data-del]").onclick=async ()=>{
-      const rr=await fetch(`/api/subjects/${id}/videos/${v._id}`,{method:"DELETE",headers:authHeaders()});
+      const rr=await fetch(apiUrl(`/api/subjects/${id}/videos/${v._id}`),{method:"DELETE",headers:authHeaders()});
       if(rr.ok) loadVideos();
     };
     el.querySelector("[data-ed]").onclick=async ()=>{
       const nt=prompt("Novo título:", v.title); if(!nt) return;
-      const rr=await fetch(`/api/subjects/${id}/videos/${v._id}`,{method:"PUT",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({title:nt})});
+      const rr=await fetch(apiUrl(`/api/subjects/${id}/videos/${v._id}`),{method:"PUT",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({title:nt})});
       if(rr.ok) loadVideos();
     };
     wrap.appendChild(el);
@@ -132,7 +132,7 @@ async function addVideoUrl(){
   const title=document.getElementById("v-title").value.trim();
   const url=document.getElementById("v-url").value.trim();
   if(!title||!url){alert("Informe título e URL");return}
-  const r=await fetch(`/api/subjects/${id}/videos/url`,{
+  const r=await fetch(apiUrl(`/api/subjects/${id}/videos/url`),{
     method:"POST",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({title,url})
   });
   if(r.ok){document.getElementById("v-title").value="";document.getElementById("v-url").value="";loadVideos()} else {alert("Erro")}
@@ -145,12 +145,12 @@ async function uploadVideoFile(){
   const fd=new FormData();
   if(title) fd.append("title", title);
   fd.append("file", f);
-  const r=await fetch(`/api/subjects/${id}/videos/upload`,{method:"POST",headers:{...authHeaders()},body:fd});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/videos/upload`),{method:"POST",headers:{...authHeaders()},body:fd});
   if(r.ok){document.getElementById("v-file").value="";loadVideos()} else {alert("Erro no upload")}
 }
 async function loadNotes(){
   const id=getId();
-  const r=await fetch(`/api/subjects/${id}/notes`,{headers:authHeaders()});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/notes`),{headers:authHeaders()});
   if(!r.ok){notesState.items=[]; renderNotePage(); return}
   const items=await r.json();
   notesState.items = items;
@@ -163,7 +163,7 @@ async function addNote(){
   const title=document.getElementById("n-title").value.trim();
   const content=document.getElementById("n-content").value.trim();
   if(!title||!content){alert("Título e conteúdo");return}
-  const r=await fetch(`/api/subjects/${id}/notes`,{method:"POST",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({title,content})});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/notes`),{method:"POST",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({title,content})});
   if(r.ok){loadNotes()} else {alert("Erro")}
 }
 const notesState={items:[],i:-1,editing:false,creating:false};
@@ -208,7 +208,7 @@ async function deletePage(){
   if(notesState.i<0) return;
   const cur=notesState.items[notesState.i];
   const id=getId();
-  const r=await fetch(`/api/subjects/${id}/notes/${cur._id}`,{method:"DELETE",headers:authHeaders()});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/notes/${cur._id}`),{method:"DELETE",headers:authHeaders()});
   if(r.ok){loadNotes();} else {alert("Erro ao excluir")}
 }
 
@@ -301,7 +301,7 @@ function renderReminders(){
 }
 async function loadActivities(){
   const id=getId();
-  const r=await fetch(`/api/subjects/${id}/activities`,{headers:authHeaders()});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/activities`),{headers:authHeaders()});
   if(!r.ok){calState.activities=[];renderCalendar();return}
   calState.activities=await r.json();
   renderCalendar();
@@ -329,17 +329,17 @@ function openActivityEditor(a){
 }
 async function addActivityAPI(payload){
   const id=getId();
-  const r=await fetch(`/api/subjects/${id}/activities`,{method:"POST",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify(payload)});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/activities`),{method:"POST",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify(payload)});
   if(r.ok){loadActivities()} else {alert("Erro ao criar atividade")}
 }
 async function updateActivityAPI(activityId,payload){
   const id=getId();
-  const r=await fetch(`/api/subjects/${id}/activities/${activityId}`,{method:"PUT",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify(payload)});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/activities/${activityId}`),{method:"PUT",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify(payload)});
   if(r.ok){loadActivities()} else {alert("Erro ao atualizar atividade")}
 }
 async function deleteActivity(activityId){
   const id=getId();
-  const r=await fetch(`/api/subjects/${id}/activities/${activityId}`,{method:"DELETE",headers:authHeaders()});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/activities/${activityId}`),{method:"DELETE",headers:authHeaders()});
   if(r.ok){loadActivities()} else {alert("Erro ao excluir atividade")}
 }
 function prevMonth(){calState.month--; if(calState.month<0){calState.month=11;calState.year--;} renderCalendar();}
@@ -383,7 +383,7 @@ async function loadWeeklyTab() {
 
 async function loadGlobalStats() {
   const id = getId();
-  const r = await fetch(`/api/subjects/${id}/study-stats`, { headers: authHeaders() });
+  const r = await fetch(apiUrl(`/api/subjects/${id}/study-stats`), { headers: authHeaders() });
   if (!r.ok) return;
   const stats = await r.json();
   const avgEl = document.getElementById("global-avg-hours");
@@ -595,11 +595,11 @@ function initTabs(){
 }
 async function saveTestResult(correct,total){
   const id=getId();
-  await fetch(`/api/subjects/${id}/tests`,{method:"POST",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({correct,total})});
+  await fetch(apiUrl(`/api/subjects/${id}/tests`),{method:"POST",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({correct,total})});
 }
 async function loadTests(){
   const id=getId();
-  const r=await fetch(`/api/subjects/${id}/tests`,{headers:authHeaders()});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/tests`),{headers:authHeaders()});
   if(!r.ok) return;
   const data=await r.json();
   const tbody=document.querySelector("#tests-table tbody");
@@ -648,7 +648,7 @@ function closeFlashcardsModal(){
 }
 async function loadFlashcardsManager(){
   const id=getId();
-  const r=await fetch(`/api/subjects/${id}/flashcards`,{headers:authHeaders()});
+  const r=await fetch(apiUrl(`/api/subjects/${id}/flashcards`),{headers:authHeaders()});
   if(!r.ok) return;
   const items=await r.json();
   const tbody=document.querySelector("#fc-manage-table tbody");
@@ -663,7 +663,7 @@ async function loadFlashcardsManager(){
                     <button class="btn btn-wrong" data-del="${fc._id}">Excluir</button>
                   </td>`;
     tr.querySelector("[data-del]").onclick=async ()=>{
-      const rr=await fetch(`/api/subjects/${id}/flashcards/${fc._id}`,{method:"DELETE",headers:authHeaders()});
+      const rr=await fetch(apiUrl(`/api/subjects/${id}/flashcards/${fc._id}`),{method:"DELETE",headers:authHeaders()});
       if(rr.ok){ loadFlashcards(); loadFlashcardsManager(); }
     };
     tr.querySelector("[data-ed]").onclick=()=>{
@@ -677,7 +677,7 @@ async function loadFlashcardsManager(){
         const nf=tr.querySelector("#ed-front").value.trim();
         const nb=tr.querySelector("#ed-back").value.trim();
         if(!nf||!nb){alert("Preencha frente e verso");return}
-        const rr=await fetch(`/api/subjects/${id}/flashcards/${fc._id}`,{method:"PUT",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({front:nf,back:nb})});
+        const rr=await fetch(apiUrl(`/api/subjects/${id}/flashcards/${fc._id}`),{method:"PUT",headers:{ "Content-Type":"application/json",...authHeaders()},body:JSON.stringify({front:nf,back:nb})});
         if(rr.ok){ loadFlashcards(); loadFlashcardsManager(); } else { alert("Erro ao salvar"); }
       };
       tr.querySelector("#cancel-ed").onclick=()=>loadFlashcardsManager();
