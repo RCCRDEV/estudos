@@ -2,238 +2,353 @@
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="api-base" content="">
   <title>Matéria - StudyFlow</title>
   <link rel="stylesheet" href="css/style.css">
   <script src="js/env.js"></script>
   <script src="js/config.js"></script>
-  <style>
-    .section{margin-top:24px}
-    .row{display:flex;gap:16px;flex-wrap:wrap}
-    textarea{width:100%;min-height:100px;padding:12px;border:1px solid #ccc;border-radius:6px}
-    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    @media(max-width:900px){.two-col{grid-template-columns:1fr}}
-  </style>
 </head>
 <body>
-  <button class="theme-toggle" onclick="toggleTheme()" aria-label="Alternar tema">🌗</button>
-  <div class="container">
-    <div class="sidebar">
-      <h2>StudyFlow</h2>
-      <ul>
-        <li onclick="location.href='dashboard.html'">Dashboard</li>
-      </ul>
+
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="Alternar tema">🌙</button>
+
+<div class="container">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-icon">📚</div>
+        <h1>StudyFlow</h1>
+      </div>
     </div>
-    <div class="content">
-      <h1 id="subject-title">Matéria</h1>
+    
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Menu</div>
+        <a class="sidebar-link" href="dashboard.html">
+          <span class="sidebar-link-icon">🏠</span>
+          Dashboard
+        </a>
+      </div>
+      
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Matéria</div>
+        <div id="sidebar-subjects"></div>
+      </div>
+    </nav>
+  </aside>
+  
+  <main class="main-content">
+    <header class="content-header">
+      <div>
+        <h1 class="page-title" id="subject-title">Carregando...</h1>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="window.location.href='dashboard.html'">
+          ← Voltar
+        </button>
+      </div>
+    </header>
+    
+    <div class="content-body">
       <div class="tabs">
-        <div class="tab active" data-tab="flashcards">Flashcards</div>
-        <div class="tab" data-tab="videos">Vídeos</div>
-        <div class="tab" data-tab="notes">Anotações</div>
-        <div class="tab" data-tab="activities">Atividades</div>
-        <div class="tab" data-tab="weekly">Semanal</div>
+        <button class="tab active" data-tab="flashcards" onclick="switchTab('flashcards')">
+          <span>🃏</span> Flashcards
+        </button>
+        <button class="tab" data-tab="videos" onclick="switchTab('videos')">
+          <span>🎬</span> Vídeos
+        </button>
+        <button class="tab" data-tab="notes" onclick="switchTab('notes')">
+          <span>📝</span> Anotações
+        </button>
+        <button class="tab" data-tab="activities" onclick="switchTab('activities')">
+          <span>📅</span> Atividades
+        </button>
+        <button class="tab" data-tab="weekly" onclick="switchTab('weekly')">
+          <span>📊</span> Planner
+        </button>
       </div>
 
       <div id="tab-flashcards" class="tab-content active">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-          <div class="score-badge">Total: <span id="fc-total">0</span></div>
-          <button class="btn btn-next" onclick="startSession()" id="btn-start">Iniciar teste</button>
-          <button class="btn btn-reveal" onclick="openFlashcardsModal()" id="btn-manage">Gerenciar flashcards</button>
-        </div>
-        <div id="trainer" class="flashcard-stage" style="display:none">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div class="score-badge">Score: <span id="score">0</span></div>
-            <div id="fc-counter" class="muted"></div>
-          </div>
-          <div class="flip-wrap">
-            <div id="flip" class="flip">
-              <div class="face front-face"><div id="fc-front-view"></div></div>
-              <div class="face back-face"><div id="fc-back-view"></div></div>
+        <div class="flashcard-section">
+          <div class="flashcard-main-card">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">Teste seus conhecimentos</h3>
+                <p class="text-muted" style="font-size: 14px; margin-top: 4px;">Practice makes perfect!</p>
+              </div>
+              <div style="display: flex; gap: 12px; align-items: center;">
+                <span class="badge badge-primary" id="fc-total">0 flashcards</span>
+                <button class="btn btn-secondary btn-sm" onclick="openFlashcardsModal()">⚙️ Gerenciar</button>
+              </div>
+            </div>
+            
+            <div id="flashcard-area-init">
+              <div class="flashcard-empty-state" id="fc-empty-state">
+                <div class="flashcard-empty-icon">🃏</div>
+                <div class="flashcard-empty-title">Nenhum flashcard cadastrado</div>
+                <div class="flashcard-empty-desc">Adicione flashcards abaixo para começar!</div>
+              </div>
+              <div class="flashcard-controls" id="flashcard-controls" style="display: none;">
+                <button class="btn btn-primary btn-lg" onclick="startSession()">
+                  🎯 Iniciar Teste
+                </button>
+              </div>
+            </div>
+            
+            <div class="flashcard-session" id="flashcard-session" style="display: none;">
+              <div class="session-progress">
+                <span class="flashcard-counter" id="fc-counter">1 / 10</span>
+                <span class="flashcard-score-badge" id="score-badge">⭐ 0</span>
+              </div>
+              
+              <div class="flashcard-reveal-area" id="flashcard-reveal-area">
+                <div class="flashcard-front" id="fc-front-card">
+                  <div class="card-face-label">Pergunta</div>
+                  <div class="card-face-content" id="fc-front-text"></div>
+                </div>
+                
+                <div class="flashcard-back" id="fc-back-card" style="display: none;">
+                  <div class="card-face-label">Resposta</div>
+                  <div class="card-face-content" id="fc-back-text"></div>
+                </div>
+              </div>
+              
+              <div class="flashcard-actions-area">
+                <button class="btn btn-secondary btn-lg" onclick="revealCard()" id="btn-reveal">
+                  👁️ Revelar Resposta
+                </button>
+                <button class="btn btn-success btn-lg" onclick="markCorrect()" id="btn-correct" style="display: none;">
+                  ✓ Acertou!
+                </button>
+                <button class="btn btn-danger btn-lg" onclick="markWrong()" id="btn-wrong" style="display: none;">
+                  ✗ Errou
+                </button>
+              </div>
+              
+              <div id="fc-summary" class="session-summary" style="display: none;"></div>
             </div>
           </div>
-          <div class="trainer-actions">
-            <button class="btn btn-reveal" onclick="revealCard()" id="btn-reveal">Revelar</button>
-            <button class="btn btn-correct" onclick="markCorrect()" id="btn-correct" disabled>Acertou</button>
-            <button class="btn btn-wrong" onclick="markWrong()" id="btn-wrong" disabled>Errou</button>
-          </div>
-          <div id="fc-summary" class="muted" style="margin-top:8px"></div>
-        </div>
-        <div class="section">
-          <div class="login-box" style="max-width:620px">
-            <h2 style="margin:0 0 12px 0;">Adicionar flashcard</h2>
-            <input id="fc-front" placeholder="Pergunta">
-            <input id="fc-back" placeholder="Resposta">
-            <button onclick="addFlashcard()">Adicionar</button>
-          </div>
-          <div class="login-box" style="max-width:780px;margin-top:16px">
-            <h2 style="margin:0 0 12px 0;">Últimos testes</h2>
-            <div class="muted" style="margin-bottom:8px">Média geral: <span id="tests-avg">0</span>%</div>
-            <div style="overflow:auto">
-              <table id="tests-table" style="width:100%;border-collapse:collapse">
-                <thead>
-                  <tr>
-                    <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)">Quando</th>
-                    <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)">Acertos</th>
-                    <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)">Total</th>
-                    <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)">%</th>
-                    <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)">Status</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
+          
+          <div class="flashcard-add-card">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">➕ Novo Flashcard</h3>
+              </div>
+              <div class="input-group">
+                <label class="input-label">Pergunta (Frente)</label>
+                <input type="text" id="fc-front" class="input" placeholder="Digite a pergunta...">
+              </div>
+              <div class="input-group">
+                <label class="input-label">Resposta (Verso)</label>
+                <input type="text" id="fc-back" class="input" placeholder="Digite a resposta...">
+              </div>
+              <button class="btn btn-primary w-full" onclick="addFlashcard()">
+                + Adicionar Flashcard
+              </button>
+            </div>
+            
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">📊 Estatísticas</h3>
+              </div>
+              <div class="stats-mini">
+                <div class="stat-mini-item">
+                  <span class="stat-mini-value" id="tests-total">0</span>
+                  <span class="stat-mini-label">Total</span>
+                </div>
+                <div class="stat-mini-item">
+                  <span class="stat-mini-value" id="tests-avg">0%</span>
+                  <span class="stat-mini-label">Média Aprovação</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <div id="tab-videos" class="tab-content">
-        <div class="login-box" style="max-width:620px">
-          <h2 style="margin:0 0 12px 0;">Adicionar vídeo</h2>
-          <input id="v-title" placeholder="Título do vídeo">
-          <input id="v-url" placeholder="URL do vídeo (YouTube, etc.)">
-          <button onclick="addVideoUrl()">Salvar</button>
-          <div style="margin:10px 0"></div>
-          <input id="v-file" type="file" accept="video/*">
-          <button onclick="uploadVideoFile()">Upload arquivo</button>
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3 class="card-title">Adicionar Vídeo</h3>
+          </div>
+          <div class="grid-2">
+            <div class="input-group">
+              <label class="input-label">Título</label>
+              <input type="text" id="v-title" class="input" placeholder="Nome do vídeo">
+            </div>
+            <div class="input-group">
+              <label class="input-label">URL</label>
+              <input type="text" id="v-url" class="input" placeholder="https://...">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="addVideoUrl()">+ Adicionar</button>
         </div>
-        <div id="videos" class="grid"></div>
+        <div id="videos" class="videos-grid"></div>
       </div>
 
       <div id="tab-notes" class="tab-content">
-        <div class="toolbar">
-          <button class="btn btn-reveal" onclick="prevPage()">◀</button>
-          <div id="note-page" class="muted">Página 0/0</div>
-          <button class="btn btn-reveal" onclick="nextPage()">▶</button>
-          <button class="btn btn-next" onclick="newPage()">Nova página</button>
-          <button class="btn btn-reveal" onclick="editPage()">Editar</button>
-          <button class="btn btn-correct" onclick="savePage()" id="btn-save-page" disabled>Salvar</button>
-          <button class="btn btn-wrong" onclick="deletePage()">Excluir</button>
-        </div>
-        <div class="login-box" style="max-width:820px">
-          <input id="n-title" placeholder="Título da página">
-          <div class="paper" style="margin:10px 0">
-            <textarea id="n-content" placeholder="Escreva como em um caderno..."></textarea>
+        <div class="notebook-container">
+          <div class="notebook-header">
+            <div class="notebook-tabs">
+              <button class="nb-tab" onclick="prevPage()">◀ Anterior</button>
+              <span id="note-page" class="nb-page-indicator">Página 1 de 1</span>
+              <button class="nb-tab" onclick="nextPage()">Próxima ▶</button>
+            </div>
+            <div class="notebook-actions">
+              <button class="nb-btn nb-btn-primary" onclick="newPage()">+ Nova</button>
+              <button class="nb-btn" onclick="editPage()">✎ Editar</button>
+              <button class="nb-btn nb-btn-success" onclick="savePage()" id="btn-save-page" disabled>✓ Salvar</button>
+              <button class="nb-btn nb-btn-danger" onclick="deletePage()">✕ Excluir</button>
+            </div>
+          </div>
+          <div class="notebook">
+            <div class="notebook-ring"></div>
+            <div class="notebook-ring"></div>
+            <div class="notebook-ring"></div>
+            <div class="notebook-ring"></div>
+            <div class="notebook-ring"></div>
+            <div class="notebook-ring"></div>
+            <div class="notebook-ring"></div>
+            <div class="notebook-ring"></div>
+            <div class="notebook-content">
+              <input id="n-title" class="notebook-title" placeholder="Título da página...">
+              <div class="notebook-paper">
+                <textarea id="n-content" class="notebook-textarea" placeholder="Suas anotações..."></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="notebook-pages-nav">
+            <div id="pages-list" class="pages-list"></div>
           </div>
         </div>
       </div>
 
       <div id="tab-activities" class="tab-content">
-        <div class="toolbar">
-          <button class="btn btn-reveal" onclick="prevMonth()">◀</button>
-          <div id="cal-title" class="muted"></div>
-          <button class="btn btn-reveal" onclick="nextMonth()">▶</button>
-        </div>
-        <div class="calendar">
-          <div class="cal-head">
-            <div class="muted">Dom</div><div class="muted">Seg</div><div class="muted">Ter</div><div class="muted">Qua</div><div class="muted">Qui</div><div class="muted">Sex</div><div class="muted">Sáb</div>
+        <div class="activities-layout">
+          <div class="activities-header">
+            <div class="cal-nav">
+              <button class="nav-btn" onclick="prevMonth()">◀</button>
+              <h2 id="cal-title" class="cal-month-title"></h2>
+              <button class="nav-btn" onclick="nextMonth()">▶</button>
+            </div>
+            <button class="btn btn-primary" onclick="openActivityModal()">+ Nova Atividade</button>
           </div>
-          <div id="cal-grid" class="cal-grid"></div>
-        </div>
-        <div class="section">
-          <div class="login-box" style="max-width:780px">
-            <h2 style="margin:0 0 12px 0;">Lembretes</h2>
-            <div id="reminders" class="row"></div>
+          <div class="calendar-wrapper">
+            <div class="cal-head">
+              <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+            </div>
+            <div id="cal-grid" class="cal-grid"></div>
+          </div>
+          <div class="activities-list-section">
+            <h2 class="section-title">📋 Próximas Atividades</h2>
+            <div id="reminders" class="reminders-grid"></div>
           </div>
         </div>
       </div>
 
       <div id="tab-weekly" class="tab-content">
         <div class="weekly-container">
-          <!-- Header da Semana Premium -->
           <div class="weekly-header">
             <div style="display:flex; gap: 15px; align-items: center;">
-              <button class="nav-btn" onclick="changeWeek(-1)" title="Semana Anterior">◀</button>
+              <button class="nav-btn" onclick="changeWeek(-1)">◀</button>
               <span id="weekly-range-label" class="range-label"></span>
-              <button class="nav-btn" onclick="changeWeek(1)" title="Próxima Semana">▶</button>
-            </div>
-            
-            <div style="display:flex; gap: 25px; align-items: center;">
-              <div style="text-align: right;">
-                <div class="stat-lab-new">Total Semana</div>
-                <div class="stat-val-new" style="color: var(--accent);"><span id="weekly-total-hours">0</span>h</div>
-              </div>
-              <div style="text-align: right;">
-                <div class="stat-lab-new">Média Semana</div>
-                <div class="stat-val-new" style="color: var(--accent);"><span id="weekly-avg-hours">0</span>h</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Estatísticas Globais Premium -->
-          <div class="stats-grid">
-            <div class="stat-card-new">
-              <div class="stat-val-new" id="global-avg-hours">0.0h</div>
-              <div class="stat-lab-new">Média Geral</div>
-            </div>
-            <div class="stat-card-new">
-              <div class="stat-val-new" id="global-total-hours">0h</div>
-              <div class="stat-lab-new">Total Acumulado</div>
-            </div>
-            <div class="stat-card-new accent-bg">
-              <div class="stat-lab-new" style="margin-bottom: 8px; color: var(--text);">Registrar Estudo</div>
-              <div style="display:flex; gap: 8px; justify-content: center; flex-direction: column; align-items: center;">
-                <input type="date" id="quick-date-input" class="h-input" style="width: 140px; height: 34px; font-size: 12px; margin-bottom: 5px;">
-                <div style="display:flex; gap: 5px;">
-                  <input type="number" id="today-hours-input" step="0.5" min="0" placeholder="Horas" class="h-input" style="width: 80px; height: 40px;">
-                  <button class="add-t-btn" onclick="saveQuickStudyLog()" style="border-radius: 10px; width: 40px; height: 40px;">✓</button>
-                </div>
-              </div>
+              <button class="nav-btn" onclick="changeWeek(1)">▶</button>
             </div>
           </div>
           
-          <!-- Grid do Planner Semanal -->
-          <div id="weekly-agenda-grid" class="weekly-grid">
-            <!-- Gerado via JS: Domingo a Sábado -->
-          </div>
+          <div id="weekly-agenda-grid" class="weekly-grid"></div>
         </div>
       </div>
     </div>
-  </div>
-  <div id="result-modal" class="modal-backdrop" style="display:none">
-    <div class="modal-card">
-      <h2>Resultado do Teste</h2>
-      <p id="result-text"></p>
-      <button class="btn btn-next" onclick="closeResultModal()">Ok</button>
+  </main>
+</div>
+
+<div id="result-modal" class="modal-backdrop" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="result-modal-title">🎉 Resultado</h3>
+      <button class="modal-close" onclick="closeResultModal()">×</button>
     </div>
-  </div>
-  <div id="flashcards-modal" class="modal-backdrop" style="display:none">
-    <div class="modal-card" style="width:min(94vw, 860px);text-align:left">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <h2 style="margin:0">Gerenciar flashcards</h2>
-        <button class="btn btn-wrong" onclick="closeFlashcardsModal()">Fechar</button>
-      </div>
-      <div style="overflow:auto;max-height:60vh">
-        <table id="fc-manage-table" style="width:100%;border-collapse:collapse">
-          <thead>
-            <tr>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)">Pergunta</th>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)">Resposta</th>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)">Ações</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+    <div class="modal-body text-center">
+      <div style="font-size: 72px; margin-bottom: 16px;" id="result-icon">🎯</div>
+      <div style="font-size: 48px; font-weight: 800; margin-bottom: 8px;" id="result-score">0%</div>
+      <p id="result-text" style="font-size: 16px; color: var(--text-secondary); margin-bottom: 24px;"></p>
+      <div style="display: flex; gap: 12px; justify-content: center;">
+        <button class="btn btn-secondary" onclick="closeResultModal()">Fechar</button>
+        <button class="btn btn-primary" onclick="startSession(); closeResultModal();">🔄 Tentar Novamente</button>
       </div>
     </div>
   </div>
-  <div id="activity-modal" class="modal-backdrop" style="display:none">
-    <div class="modal-card" style="width:min(94vw, 560px);text-align:left">
-      <h2 style="margin:0 0 8px 0">Agendar atividade</h2>
-      <div class="two-col" style="margin-bottom:10px">
-        <input id="am-title" placeholder="Título">
-        <input id="am-tags" placeholder="Tags (ex.: prova, lembrete)">
-      </div>
-      <div class="two-col" style="margin-bottom:10px">
-        <input id="am-start" type="datetime-local">
-        <input id="am-end" type="datetime-local">
-      </div>
-      <input id="am-desc" placeholder="Descrição (opcional)">
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
-        <button class="btn btn-wrong" onclick="closeActivityModal()">Cancelar</button>
-        <button class="btn btn-next" onclick="submitActivityModal()">Salvar</button>
-      </div>
+</div>
+
+<div id="flashcards-modal" class="modal-backdrop" style="display:none">
+  <div class="modal" style="max-width: 800px;">
+    <div class="modal-header">
+      <h3 class="modal-title">⚙️ Gerenciar Flashcards</h3>
+      <button class="modal-close" onclick="closeFlashcardsModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="flashcards-manage-list" class="flashcards-manage-list"></div>
     </div>
   </div>
-  <script src="js/subject.js"></script>
+</div>
+
+<div id="activity-modal" class="modal-backdrop" style="display:none">
+  <div class="activity-modal-card">
+    <div class="activity-modal-header">
+      <h2>📅 Nova Atividade</h2>
+      <button class="modal-close-btn" onclick="closeActivityModal()">✕</button>
+    </div>
+    <div class="activity-type-selector">
+      <button type="button" class="type-btn" data-type="prova" onclick="selectActivityType('prova')">
+        <span class="type-icon">📝</span>
+        <span class="type-label">Prova</span>
+      </button>
+      <button type="button" class="type-btn" data-type="lembrete" onclick="selectActivityType('lembrete')">
+        <span class="type-icon">🔔</span>
+        <span class="type-label">Lembrete</span>
+      </button>
+      <button type="button" class="type-btn selected" data-type="atividade" onclick="selectActivityType('atividade')">
+        <span class="type-icon">📋</span>
+        <span class="type-label">Atividade</span>
+      </button>
+      <button type="button" class="type-btn" data-type="outro" onclick="selectActivityType('outro')">
+        <span class="type-icon">📌</span>
+        <span class="type-label">Outro</span>
+      </button>
+    </div>
+    <input type="hidden" id="am-type" value="atividade">
+    <input type="hidden" id="am-edit-id" value="">
+    <div class="activity-form-group">
+      <label for="am-title">Título</label>
+      <input id="am-title" class="input" placeholder="Ex: Prova de Matemática">
+    </div>
+    <div class="activity-form-row">
+      <div class="activity-form-group">
+        <label for="am-start">Início</label>
+        <input id="am-start" type="datetime-local" class="input">
+      </div>
+      <div class="activity-form-group">
+        <label for="am-end">Término</label>
+        <input id="am-end" type="datetime-local" class="input">
+      </div>
+    </div>
+    <div class="activity-form-group">
+      <label for="am-desc">Descrição</label>
+      <textarea id="am-desc" class="input" placeholder="Detalhes..."></textarea>
+    </div>
+    <div class="activity-form-group">
+      <label for="am-tags">Tags</label>
+      <input id="am-tags" class="input" placeholder="Ex: importante, capítulo 3">
+    </div>
+    <div class="activity-modal-footer">
+      <button class="btn btn-secondary" onclick="closeActivityModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitActivityModal()">✓ Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/subject.js"></script>
 </body>
 </html>

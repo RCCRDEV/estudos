@@ -1,48 +1,64 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-
 <head>
-<meta charset="UTF-8">
-<meta name="api-base" content="">
-<title>Login - StudyFlow</title>
-<link rel="stylesheet" href="css/style.css">
-<script src="js/env.js"></script>
-<script src="js/config.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="api-base" content="">
+  <title>Login - StudyFlow</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/env.js"></script>
+  <script src="js/config.js"></script>
 </head>
-
 <body>
 
-<button class="theme-toggle" onclick="toggleTheme()" aria-label="Alternar tema">🌗</button>
-<div class="container">
-
-<div class="left">
-
-<h1>StudyFlow</h1>
-<p>Organize seus estudos e acompanhe seu progresso.</p>
-
-</div>
-
-<div class="right">
-
-<div class="login-box">
-
-<h2>Entrar</h2>
-
-<input type="email" placeholder="Email" id="email">
-
-<input type="password" placeholder="Senha" id="senha">
-
-<button onclick="login()">Entrar</button>
-
-<p>Não tem conta? <a href="register.html">Cadastrar</a></p>
-
-</div>
-
-</div>
-
+<div class="auth-page">
+  <div class="auth-left">
+    <div class="auth-brand">
+      <div class="auth-brand-logo">📚</div>
+      <h1>StudyFlow</h1>
+      <p>Organize seus estudos, acompanhe seu progresso e alcance seus objetivos.</p>
+    </div>
+    <div class="auth-features">
+      <div class="auth-feature">
+        <div class="auth-feature-icon">📊</div>
+        <span>Estatísticas detalhadas</span>
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">🎯</div>
+        <span>Metas personalizadas</span>
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">⚡</div>
+        <span>Flashcards inteligentes</span>
+      </div>
+    </div>
+  </div>
+  <div class="auth-right">
+    <form class="auth-form" onsubmit="return false;">
+      <h2 class="auth-title">Bem-vindo de volta</h2>
+      <p class="auth-subtitle">Entre para continuar seus estudos</p>
+      
+      <div class="input-group">
+        <label class="input-label">Email</label>
+        <input type="email" id="email" class="input" placeholder="seu@email.com">
+      </div>
+      
+      <div class="input-group">
+        <label class="input-label">Senha</label>
+        <input type="password" id="senha" class="input" placeholder="••••••••">
+      </div>
+      
+      <button class="btn btn-primary btn-lg w-full" onclick="login()">
+        Entrar
+      </button>
+      
+      <div class="auth-footer">
+        Não tem conta? <a href="register.html">Cadastre-se</a>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script src="js/script.js"></script>
-
 </body>
 </html>
