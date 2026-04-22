@@ -5,12 +5,13 @@ let flashcards = [];
 let fcQueue = [];
 let fcIndex = 0;
 let fcScore = 0;
+let testsState = { items: [], avg: 0, count: 0 };
 
 let videos = [];
 
 let notesState = { items: [], i: -1, editing: false, creating: false };
 
-let calState = { year: new Date().getFullYear(), month: new Date().getMonth(), activities: [] };
+let calState = { year: new Date().getFullYear(), month: new Date().getMonth(), activities: [], selectedKey: null };
 
 let weeklyState = { weekStart: getWeekStart(new Date()), plannerData: [] };
 
@@ -27,10 +28,15 @@ function authHeaders() {
   return { Authorization: `Bearer ${t}` };
 }
 
-function apiUrl(path) {
-  const base = document.querySelector("meta[name='api-base']")?.content || "";
-  return base + path;
-}
+const api = (typeof window !== "undefined" && typeof window.apiUrl === "function")
+  ? window.apiUrl
+  : function (path) {
+    if (/^https?:\/\//i.test(path)) return path;
+    const base = document.querySelector("meta[name='api-base']")?.content || "";
+    const p = path.startsWith("/") ? path : "/" + path;
+    const b = base ? base.replace(/\/$/, "") : "";
+    return b ? b + p : p;
+  };
 
 function fmtDateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -48,29 +54,52 @@ function toLocalStr(dt) {
 }
 
 async function init() {
-  const params = new URLSearchParams(window.location.search);
-  subjectId = params.get("id");
-  if (!subjectId) {
-    window.location.href = "dashboard.html";
-    return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    subjectId = params.get("id");
+    if (!subjectId) {
+      window.location.href = "dashboard.html";
+      return;
+    }
+    const t = localStorage.getItem("token");
+    if (!t) {
+      window.location.href = "login.html";
+      return;
+    }
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        currentUser = JSON.parse(userStr);
+      } catch {
+        currentUser = null;
+        localStorage.removeItem("user");
+      }
+      const nameEl = document.getElementById("user-name");
+      if (nameEl) nameEl.textContent = currentUser?.nome || "Usuário";
+      const avatarEl = document.getElementById("user-avatar");
+      if (avatarEl) avatarEl.textContent = (currentUser?.nome || "U").charAt(0).toUpperCase();
+    }
+
+    initTabs();
+    if (!calState.selectedKey) calState.selectedKey = fmtDateKey(new Date());
+    renderCalendar();
+    renderPlannerWeek();
+
+    const jobs = [loadSubject, loadFlashcards, loadTests, loadVideos, loadNotes, loadActivities, loadWeeklyPlanner];
+    await Promise.all(
+      jobs.map(fn => Promise.resolve().then(() => fn()).catch((e) => console.error(e)))
+    );
+  } catch (e) {
+    console.error(e);
+    initTabs();
+    if (!calState.selectedKey) calState.selectedKey = fmtDateKey(new Date());
+    renderCalendar();
+    renderPlannerWeek();
   }
-  const t = localStorage.getItem("token");
-  if (!t) {
-    window.location.href = "login.html";
-    return;
-  }
-  const userStr = localStorage.getItem("user");
-  if (userStr) {
-    currentUser = JSON.parse(userStr);
-    document.getElementById("user-name").textContent = currentUser.nome || "Usuário";
-    document.getElementById("user-avatar").textContent = (currentUser.nome || "U").charAt(0).toUpperCase();
-  }
-  await Promise.all([loadSubject(), loadFlashcards(), loadVideos(), loadNotes(), loadActivities(), loadWeeklyData()]);
-  initTabs();
 }
 
 async function loadSubject() {
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}`), { headers: authHeaders() });
+  const res = await fetch(api(`/api/subjects/${subjectId}`), { headers: authHeaders() });
   if (!res.ok) {
     if (res.status === 401) window.location.href = "login.html";
     return;
@@ -84,7 +113,7 @@ async function loadSubject() {
 }
 
 async function loadFlashcards() {
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/flashcards`), { headers: authHeaders() });
+  const res = await fetch(api(`/api/subjects/${subjectId}/flashcards`), { headers: authHeaders() });
   if (!res.ok) return;
   flashcards = await res.json();
   document.getElementById("fc-total").textContent = `${flashcards.length} flashcards`;
@@ -111,8 +140,141 @@ function renderFlashcardInit() {
 function updateFlashcardStats() {
   const total = document.getElementById("tests-total");
   const avg = document.getElementById("tests-avg");
-  if (total) total.textContent = flashcards.length;
-  if (avg) avg.textContent = "0%";
+  if (total) total.textContent = String(testsState.count || 0);
+  if (avg) avg.textContent = `${Math.round(Number(testsState.avg) || 0)}%`;
+}
+
+async function loadTests() {
+  const res = await fetch(api(`/api/subjects/${subjectId}/tests`), { headers: authHeaders() });
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (!res.ok) return;
+  const data = await res.json();
+  testsState = {
+    items: Array.isArray(data.items) ? data.items : [],
+    avg: Number(data.avg) || 0,
+    count: Number(data.count) || 0,
+  };
+  updateFlashcardStats();
+  renderTestsList();
+}
+
+function openTestsListModal() {
+  const modal = document.getElementById("tests-modal");
+  if (!modal) return;
+  document.getElementById("tests-modal-title").textContent = "📊 Testes";
+  modal.style.display = "flex";
+  if (!testsState.items?.length) loadTests();
+  renderTestsList();
+}
+
+function openTestModal(test) {
+  const modal = document.getElementById("tests-modal");
+  if (!modal) return;
+  modal.style.display = "flex";
+  document.getElementById("tests-modal-title").textContent = test ? "✎ Editar teste" : "➕ Novo teste";
+  document.getElementById("tm-edit-id").value = test?._id || "";
+  document.getElementById("tm-title").value = test?.title || "";
+  document.getElementById("tm-correct").value = typeof test?.correct === "number" ? String(test.correct) : "";
+  document.getElementById("tm-total").value = typeof test?.total === "number" ? String(test.total) : "";
+  const dt = test?.takenAt ? new Date(test.takenAt) : new Date();
+  document.getElementById("tm-date").value = toLocalStr(dt);
+  if (!testsState.items?.length) loadTests();
+  renderTestsList();
+}
+
+function closeTestsModal() {
+  const modal = document.getElementById("tests-modal");
+  if (modal) modal.style.display = "none";
+}
+
+async function submitTestModal() {
+  const editId = document.getElementById("tm-edit-id").value.trim();
+  const title = document.getElementById("tm-title").value.trim();
+  const correct = Number(document.getElementById("tm-correct").value);
+  const total = Number(document.getElementById("tm-total").value);
+  const dateStr = document.getElementById("tm-date").value;
+  if (!Number.isFinite(correct) || !Number.isFinite(total) || total <= 0 || correct < 0 || correct > total) {
+    alert("Preencha acertos e total corretamente");
+    return;
+  }
+  const payload = {
+    title,
+    correct,
+    total,
+    ...(dateStr ? { takenAt: new Date(dateStr) } : {}),
+  };
+  const url = editId
+    ? api(`/api/subjects/${subjectId}/tests/${editId}`)
+    : api(`/api/subjects/${subjectId}/tests`);
+  const method = editId ? "PUT" : "POST";
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.message || "Erro ao salvar teste");
+    return;
+  }
+  await loadTests();
+  openTestsListModal();
+}
+
+async function deleteTest(testId) {
+  if (!confirm("Excluir este teste?")) return;
+  const res = await fetch(api(`/api/subjects/${subjectId}/tests/${testId}`), {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.message || "Erro ao excluir teste");
+    return;
+  }
+  await loadTests();
+}
+
+function renderTestsList() {
+  const el = document.getElementById("tests-list");
+  if (!el) return;
+  const items = testsState.items || [];
+  if (items.length === 0) {
+    el.innerHTML = '<div class="reminders-empty"><div class="reminders-empty-icon">📊</div><div class="reminders-empty-text">Nenhum teste registrado</div></div>';
+    return;
+  }
+  el.innerHTML = "";
+  items.forEach((t) => {
+    const row = document.createElement("div");
+    row.className = "test-row";
+    const taken = t.takenAt ? new Date(t.takenAt) : (t.createdAt ? new Date(t.createdAt) : null);
+    const dateStr = taken ? taken.toLocaleDateString("pt-BR") : "";
+    const pct = typeof t.percentage === "number" ? t.percentage : Math.round(((Number(t.correct) || 0) / (Number(t.total) || 1)) * 100);
+    row.innerHTML = `
+      <div class="test-main">
+        <div class="test-title">${t.title || "Teste"}</div>
+        <div class="test-sub">${dateStr} • ${t.correct}/${t.total} • ${pct}%</div>
+      </div>
+      <div class="test-actions">
+        <button class="btn btn-secondary btn-sm" data-ed>✎</button>
+        <button class="btn btn-danger btn-sm" data-del>✕</button>
+      </div>
+    `;
+    row.querySelector("[data-ed]").onclick = () => openTestModal(t);
+    row.querySelector("[data-del]").onclick = () => deleteTest(t._id);
+    el.appendChild(row);
+  });
 }
 
 function startSession() {
@@ -199,7 +361,7 @@ async function addFlashcard() {
     alert("Preencha pergunta e resposta");
     return;
   }
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/flashcards`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/flashcards`), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ front, back }),
@@ -273,7 +435,7 @@ async function saveFlashcard(id) {
   const front = document.getElementById("edit-fc-front").value.trim();
   const back = document.getElementById("edit-fc-back").value.trim();
   if (!front || !back) return;
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/flashcards/${id}`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/flashcards/${id}`), {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ front, back }),
@@ -286,7 +448,7 @@ async function saveFlashcard(id) {
 
 async function deleteFlashcard(id) {
   if (!confirm("Excluir este flashcard?")) return;
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/flashcards/${id}`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/flashcards/${id}`), {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -297,7 +459,7 @@ async function deleteFlashcard(id) {
 }
 
 async function loadVideos() {
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/videos`), { headers: authHeaders() });
+  const res = await fetch(api(`/api/subjects/${subjectId}/videos`), { headers: authHeaders() });
   if (!res.ok) return;
   videos = await res.json();
   renderVideos();
@@ -332,7 +494,7 @@ async function addVideoUrl() {
   const title = document.getElementById("v-title").value.trim();
   const url = document.getElementById("v-url").value.trim();
   if (!title || !url) return;
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/videos/url`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/videos/url`), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ title, url }),
@@ -346,7 +508,7 @@ async function addVideoUrl() {
 
 async function deleteVideo(id) {
   if (!confirm("Excluir vídeo?")) return;
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/videos/${id}`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/videos/${id}`), {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -354,7 +516,7 @@ async function deleteVideo(id) {
 }
 
 async function loadNotes() {
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/notes`), { headers: authHeaders() });
+  const res = await fetch(api(`/api/subjects/${subjectId}/notes`), { headers: authHeaders() });
   if (!res.ok) return;
   notesState.items = await res.json();
   notesState.i = notesState.items.length > 0 ? 0 : -1;
@@ -438,7 +600,7 @@ async function savePage() {
   const content = document.getElementById("n-content").value.trim();
   if (!title && !content) return;
   if (notesState.creating) {
-    const res = await fetch(apiUrl(`/api/subjects/${subjectId}/notes`), {
+    const res = await fetch(api(`/api/subjects/${subjectId}/notes`), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ title, content }),
@@ -449,7 +611,7 @@ async function savePage() {
     }
   } else if (notesState.editing) {
     const cur = notesState.items[notesState.i];
-    const res = await fetch(apiUrl(`/api/subjects/${subjectId}/notes/${cur._id}`), {
+    const res = await fetch(api(`/api/subjects/${subjectId}/notes/${cur._id}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ title, content }),
@@ -465,7 +627,7 @@ async function deletePage() {
   if (notesState.items.length === 0) return;
   const cur = notesState.items[notesState.i];
   if (!confirm("Excluir esta página?")) return;
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/notes/${cur._id}`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/notes/${cur._id}`), {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -491,10 +653,24 @@ function nextPage() {
 }
 
 async function loadActivities() {
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/activities`), { headers: authHeaders() });
-  if (!res.ok) return;
+  const res = await fetch(api(`/api/subjects/${subjectId}/activities`), { headers: authHeaders() });
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (!res.ok) {
+    calState.activities = [];
+    renderCalendar();
+    renderDayActivities();
+    const rem = document.getElementById("reminders");
+    if (rem) {
+      rem.innerHTML = '<div class="reminders-empty"><div class="reminders-empty-icon">⚠️</div><div class="reminders-empty-text">Erro ao carregar atividades</div></div>';
+    }
+    return;
+  }
   calState.activities = await res.json();
   renderCalendar();
+  renderDayActivities();
   renderReminders();
 }
 
@@ -529,9 +705,10 @@ function renderCalendar() {
     dayLbl.textContent = String(day);
     cell.appendChild(dayLbl);
     const key = fmtDateKey(new Date(calState.year, calState.month, day));
+    if (calState.selectedKey === key) cell.classList.add("selected");
     (byDay[key] || []).slice(0, 3).forEach(a => {
       const chip = document.createElement("div");
-      chip.className = "cal-chip";
+      chip.className = "cal-chip" + (a.done ? " done" : "");
       const icons = { prova: "📝", lembrete: "🔔", atividade: "📋", outro: "📌" };
       chip.textContent = `${icons[a.type] || "📋"} ${a.title}`;
       chip.onclick = () => openActivityEditor(a);
@@ -545,8 +722,10 @@ function renderCalendar() {
       openNewActivity(calState.year, calState.month, day);
     };
     cell.appendChild(addBtn);
-    cell.onclick = (e) => {
-      if (e.target === cell || e.target === dayLbl) openNewActivity(calState.year, calState.month, day);
+    cell.onclick = () => {
+      calState.selectedKey = key;
+      renderCalendar();
+      renderDayActivities();
     };
     grid.appendChild(cell);
   }
@@ -564,16 +743,16 @@ function renderReminders() {
   const typeColors = { prova: "#f59e0b", lembrete: "#ef4444", atividade: "#22c55e", outro: "#8b5cf6" };
   const typeIcons = { prova: "📝", lembrete: "🔔", atividade: "📋", outro: "📌" };
   up.forEach(a => {
-    const color = typeColors[a.type] || "#6366f1";
-    const icon = typeIcons[a.type] || "📋";
-    const el = document.createElement("div");
-    el.className = "reminder-card";
-    el.style.setProperty("--type-color", color);
     const startDate = new Date(a.startAt);
     const endDate = new Date(a.endAt);
     const dateStr = startDate.toLocaleDateString("pt-BR");
     const startTime = startDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const endTime = endDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const color = typeColors[a.type] || "#6366f1";
+    const icon = typeIcons[a.type] || "📋";
+    const el = document.createElement("div");
+    el.className = "reminder-card";
+    el.style.setProperty("--type-color", color);
     el.innerHTML = `
       <div class="reminder-actions">
         <button class="action-btn edit" data-ed="${a._id}" title="Editar">✎</button>
@@ -582,6 +761,10 @@ function renderReminders() {
       <div class="reminder-type-badge" style="background:${color}20;color:${color}">${icon} ${a.type || "atividade"}</div>
       <div class="reminder-title">${a.title}</div>
       <div class="reminder-time">📅 ${dateStr} ⏰ ${startTime} - ${endTime}</div>
+      <label class="reminder-done">
+        <input type="checkbox" ${a.done ? "checked" : ""} data-done="${a._id}">
+        <span>Concluída</span>
+      </label>
       ${a.tags && a.tags.length ? `<div class="reminder-tags">${a.tags.map(t => `<span class="tag">${t}</span>`).join("")}</div>` : ""}
       ${a.description ? `<p style="margin:8px 0 0 0;font-size:12px;color:var(--text-muted)">${a.description}</p>` : ""}
     `;
@@ -593,7 +776,58 @@ function renderReminders() {
       e.stopPropagation();
       openActivityEditor(a);
     };
+    el.querySelector("[data-done]").onchange = (e) => {
+      e.stopPropagation();
+      toggleActivityDone(a._id, e.target.checked);
+    };
     rem.appendChild(el);
+  });
+}
+
+function renderDayActivities() {
+  const wrap = document.getElementById("day-activities");
+  const title = document.getElementById("day-activities-title");
+  if (!wrap || !title) return;
+  if (!calState.selectedKey) {
+    title.textContent = "Atividades do dia";
+    wrap.innerHTML = '<div class="reminders-empty"><div class="reminders-empty-icon">📅</div><div class="reminders-empty-text">Selecione um dia no calendário</div></div>';
+    return;
+  }
+  const [y, m, d] = calState.selectedKey.split("-").map(Number);
+  const selectedDate = new Date(y, m - 1, d);
+  title.textContent = `Atividades do dia • ${selectedDate.toLocaleDateString("pt-BR")}`;
+  const items = (calState.activities || [])
+    .filter(a => {
+      const s = new Date(a.startAt);
+      return s.getFullYear() === y && (s.getMonth() + 1) === m && s.getDate() === d;
+    })
+    .sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
+  if (items.length === 0) {
+    wrap.innerHTML = '<div class="reminders-empty"><div class="reminders-empty-icon">📅</div><div class="reminders-empty-text">Nenhuma atividade neste dia</div></div>';
+    return;
+  }
+  wrap.innerHTML = "";
+  items.forEach(a => {
+    const row = document.createElement("div");
+    row.className = "day-activity-row" + (a.done ? " done" : "");
+    const startDate = new Date(a.startAt);
+    const endDate = new Date(a.endAt);
+    const startTime = startDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const endTime = endDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    row.innerHTML = `
+      <label class="day-activity-check">
+        <input type="checkbox" ${a.done ? "checked" : ""} data-done>
+      </label>
+      <div class="day-activity-main" data-ed>
+        <div class="day-activity-title">${a.title}</div>
+        <div class="day-activity-sub">${startTime} - ${endTime}</div>
+      </div>
+      <button class="planner-task-del" data-del>✕</button>
+    `;
+    row.querySelector("[data-ed]").onclick = () => openActivityEditor(a);
+    row.querySelector("[data-del]").onclick = () => deleteActivity(a._id);
+    row.querySelector("[data-done]").onchange = (e) => toggleActivityDone(a._id, e.target.checked);
+    wrap.appendChild(row);
   });
 }
 
@@ -604,6 +838,7 @@ function prevMonth() {
     calState.year--;
   }
   renderCalendar();
+  renderReminders();
 }
 
 function nextMonth() {
@@ -613,6 +848,7 @@ function nextMonth() {
     calState.year++;
   }
   renderCalendar();
+  renderReminders();
 }
 
 let actModalState = { editId: null, baseDate: null, type: "atividade" };
@@ -636,6 +872,8 @@ function openActivityModal(date) {
   document.getElementById("am-tags").value = "";
   document.getElementById("am-desc").value = "";
   document.getElementById("am-edit-id").value = "";
+  const doneEl = document.getElementById("am-done");
+  if (doneEl) doneEl.checked = false;
   const d = date || new Date();
   const startDefault = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0);
   const endDefault = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 10, 0);
@@ -655,6 +893,8 @@ function openActivityEditor(a) {
   document.getElementById("am-edit-id").value = a._id;
   document.getElementById("am-start").value = toLocalStr(new Date(a.startAt));
   document.getElementById("am-end").value = toLocalStr(new Date(a.endAt));
+  const doneEl = document.getElementById("am-done");
+  if (doneEl) doneEl.checked = Boolean(a.done);
   selectActivityType(a.type || "atividade");
   m.style.display = "flex";
 }
@@ -670,13 +910,14 @@ async function submitActivityModal() {
   const start = document.getElementById("am-start").value;
   const end = document.getElementById("am-end").value;
   const desc = document.getElementById("am-desc").value.trim();
+  const done = Boolean(document.getElementById("am-done")?.checked);
   if (!title || !start || !end) {
     alert("Preencha título e horários");
     return;
   }
   const tags = tagsStr ? tagsStr.split(",").map(s => s.trim()).filter(Boolean) : [];
   const type = actModalState.type;
-  const payload = { title, description: desc, startAt: new Date(start), endAt: new Date(end), tags, type };
+  const payload = { title, description: desc, startAt: new Date(start), endAt: new Date(end), tags, type, done };
   if (actModalState.editId) {
     await updateActivityAPI(actModalState.editId, payload);
   } else {
@@ -686,7 +927,7 @@ async function submitActivityModal() {
 }
 
 async function addActivityAPI(payload) {
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/activities`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/activities`), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload),
@@ -695,7 +936,7 @@ async function addActivityAPI(payload) {
 }
 
 async function updateActivityAPI(id, payload) {
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/activities/${id}`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/activities/${id}`), {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload),
@@ -705,118 +946,279 @@ async function updateActivityAPI(id, payload) {
 
 async function deleteActivity(id) {
   if (!confirm("Excluir atividade?")) return;
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/activities/${id}`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/activities/${id}`), {
     method: "DELETE",
     headers: authHeaders(),
   });
   if (res.ok) await loadActivities();
 }
 
-async function loadWeeklyData() {
-  const weekEnd = new Date(weeklyState.weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/planner?start=${weeklyState.weekStart.toISOString()}&end=${weekEnd.toISOString()}`), { headers: authHeaders() });
-  if (!res.ok) return;
-  weeklyState.plannerData = await res.json();
-  renderWeeklyPlanner();
+async function toggleActivityDone(id, done) {
+  const cur = (calState.activities || []).find(a => a._id === id);
+  if (!cur) return;
+  await updateActivityAPI(id, {
+    title: cur.title,
+    description: cur.description || "",
+    startAt: new Date(cur.startAt),
+    endAt: new Date(cur.endAt),
+    tags: Array.isArray(cur.tags) ? cur.tags : [],
+    type: cur.type || "atividade",
+    done: Boolean(done),
+  });
 }
 
-function renderWeeklyPlanner() {
-  const container = document.getElementById("weekly-agenda-grid");
-  const rangeLabel = document.getElementById("weekly-range-label");
-  if (!container) return;
+async function loadWeeklyPlanner() {
   const weekEnd = new Date(weeklyState.weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
-  if (rangeLabel) {
-    rangeLabel.textContent = `${weeklyState.weekStart.toLocaleDateString("pt-BR", { day: "numeric", month: "short" })} - ${weekEnd.toLocaleDateString("pt-BR", { day: "numeric", month: "short" })}`;
+  const res = await fetch(
+    api(`/api/subjects/${subjectId}/planner?start=${encodeURIComponent(weeklyState.weekStart.toISOString())}&end=${encodeURIComponent(weekEnd.toISOString())}`),
+    { headers: authHeaders() }
+  );
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
   }
+  if (!res.ok) {
+    weeklyState.plannerData = [];
+    renderPlannerWeek();
+    const data = await res.json().catch(() => ({}));
+    alert(data.message || "Erro ao carregar planner");
+    return;
+  }
+  weeklyState.plannerData = await res.json();
+  renderPlannerWeek();
+  await loadHoursStats();
+}
+
+let hoursSaveTimers = {};
+
+function statusOptionsHtml(selected) {
+  const options = [
+    { value: "nao feito", label: "⬜" },
+    { value: "em andamento", label: "⏳" },
+    { value: "aguardando", label: "🕒" },
+    { value: "procrastinado", label: "😴" },
+    { value: "cancelado", label: "❌" },
+    { value: "concluido", label: "✅" },
+  ];
+  const s = String(selected || "nao feito");
+  return options
+    .map(o => `<option value="${o.value}" ${o.value === s ? "selected" : ""}>${o.label}</option>`)
+    .join("");
+}
+
+function renderPlannerWeek() {
+  const container = document.getElementById("planner-week-grid");
+  const label = document.getElementById("planner-week-label");
+  if (!container) return;
+
+  const weekEnd = new Date(weeklyState.weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  if (label) {
+    label.textContent = `${weeklyState.weekStart.toLocaleDateString("pt-BR", { day: "numeric", month: "short" })} - ${weekEnd.toLocaleDateString("pt-BR", { day: "numeric", month: "short" })}`;
+  }
+
   const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
   container.innerHTML = "";
   const today = new Date();
-  
+
   for (let i = 0; i < 7; i++) {
     const d = new Date(weeklyState.weekStart);
     d.setDate(d.getDate() + i);
     const key = fmtDateKey(d);
-    const plannerItem = weeklyState.plannerData.find(p => fmtDateKey(new Date(p.date)) === key);
+    const plannerItem = (weeklyState.plannerData || []).find(p => fmtDateKey(new Date(p.date)) === key);
     const hours = plannerItem?.hours || 0;
     const tasks = plannerItem?.tasks || [];
     const isToday = d.toDateString() === today.toDateString();
+
     const dayEl = document.createElement("div");
     dayEl.className = "planner-day" + (isToday ? " today" : "");
+    const hoursId = `planner-hours-${key}`;
+    const newTaskId = `planner-new-${key}`;
     dayEl.innerHTML = `
       <div class="day-header">
         <span class="day-name">${dayNames[i]}</span>
         <span class="day-date">${d.getDate()}</span>
       </div>
       <div class="day-hours-input">
-        <input type="number" step="0.5" min="0" value="${hours}" 
+        <input id="${hoursId}" type="number" step="0.5" min="0" value="${hours}"
           class="input" style="width: 70px; text-align: center; padding: 8px;"
-          onchange="saveDayHours('${key}', this.value)"
+          oninput="scheduleSaveDayHours('${key}', this.value)"
+          onblur="saveDayHours('${key}', this.value)"
           placeholder="0h">
         <span style="font-size: 11px; color: var(--text-muted);">horas</span>
+        <button class="btn btn-primary btn-sm" onclick="saveDayHours('${key}', document.getElementById('${hoursId}').value)">Salvar</button>
       </div>
       <div class="day-checklist">
-        ${tasks.map((task, idx) => `
-          <div class="check-item${task.status === 'concluido' ? ' done' : ''}" onclick="toggleTask('${key}', ${idx}, '${task._id}')">
-            <div class="check-box">${task.status === 'concluido' ? '✓' : ''}</div>
-            <span class="check-text">${task.title}</span>
+        ${tasks.map((task) => `
+          <div class="check-item${task.status === 'concluido' ? ' done' : ''} planner-task-row">
+            <select class="planner-status" aria-label="Status" title="Status" onchange="updateTaskStatus('${task._id}', this.value)">
+              ${statusOptionsHtml(task.status)}
+            </select>
+            <label class="planner-task-label">
+              <input type="checkbox" ${task.status === "concluido" ? "checked" : ""} onchange="updateTaskStatus('${task._id}', this.checked ? 'concluido' : 'nao feito')">
+              <span class="check-text">${task.title}</span>
+            </label>
+            <button class="planner-task-del" onclick="deleteTask('${task._id}')">✕</button>
           </div>
         `).join("")}
-        <div class="check-item" style="color: var(--accent-primary);" onclick="addTask('${key}')">
-          <div class="check-box" style="border-style: dashed;">+</div>
-          <span>Adicionar meta</span>
+        <div class="planner-add-row">
+          <input id="${newTaskId}" class="input planner-add-input" placeholder="Nova meta..."
+            onkeydown="if(event.key==='Enter'){ addTaskInline('${key}', '${newTaskId}'); }">
+          <button class="btn btn-primary btn-sm" onclick="addTaskInline('${key}', '${newTaskId}')">+</button>
         </div>
       </div>
     `;
+
     container.appendChild(dayEl);
   }
 }
 
-function changeWeek(delta) {
+function plannerChangeWeek(delta) {
   const d = new Date(weeklyState.weekStart);
   d.setDate(d.getDate() + delta * 7);
   weeklyState.weekStart = d;
-  loadWeeklyData();
+  loadWeeklyPlanner();
+}
+
+function plannerGoToday() {
+  weeklyState.weekStart = getWeekStart(new Date());
+  loadWeeklyPlanner();
+}
+
+function scheduleSaveDayHours(dateKey, hours) {
+  if (hoursSaveTimers[dateKey]) clearTimeout(hoursSaveTimers[dateKey]);
+  hoursSaveTimers[dateKey] = setTimeout(() => saveDayHours(dateKey, hours), 700);
 }
 
 async function saveDayHours(dateKey, hours) {
   const h = parseFloat(hours) || 0;
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/planner/hours`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/planner/hours`), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ date: dateKey, hours: h }),
   });
-  if (res.ok) {
-    await loadWeeklyData();
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
   }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.message || "Erro ao salvar horas");
+    return;
+  }
+  await loadWeeklyPlanner();
 }
 
-async function toggleTask(dateKey, idx, taskId) {
-  const plannerItem = weeklyState.plannerData.find(p => fmtDateKey(new Date(p.date)) === dateKey);
-  if (!plannerItem || !plannerItem.tasks[idx]) return;
-  const currentStatus = plannerItem.tasks[idx].status;
-  const newStatus = currentStatus === 'concluido' ? 'nao feito' : 'concluido';
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/planner/tasks/${taskId}`), {
+async function updateTaskStatus(taskId, status) {
+  const res = await fetch(api(`/api/subjects/${subjectId}/planner/tasks/${taskId}`), {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ status: newStatus }),
+    body: JSON.stringify({ status: String(status) }),
   });
-  if (res.ok) {
-    await loadWeeklyData();
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
   }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.message || "Erro ao atualizar meta");
+    return;
+  }
+  await loadWeeklyPlanner();
+}
+
+async function toggleTask(taskId, currentStatus) {
+  const next = currentStatus === "concluido" ? "nao feito" : "concluido";
+  await updateTaskStatus(taskId, next);
+}
+
+async function deleteTask(taskId) {
+  if (!confirm("Excluir meta?")) return;
+  const res = await fetch(api(`/api/subjects/${subjectId}/planner/tasks/${taskId}`), {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.message || "Erro ao excluir meta");
+    return;
+  }
+  await loadWeeklyPlanner();
 }
 
 async function addTask(dateKey) {
-  const title = prompt("Qual sua meta para hoje?");
+  const title = prompt("Qual sua meta para este dia?");
   if (!title) return;
-  const res = await fetch(apiUrl(`/api/subjects/${subjectId}/planner/tasks`), {
+  const res = await fetch(api(`/api/subjects/${subjectId}/planner/tasks`), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ date: dateKey, title }),
   });
-  if (res.ok) {
-    await loadWeeklyData();
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.message || "Erro ao criar meta");
+    return;
+  }
+  await loadWeeklyPlanner();
+}
+
+async function addTaskInline(dateKey, inputId) {
+  const input = document.getElementById(inputId);
+  const title = String(input?.value || "").trim();
+  if (!title) return;
+  const res = await fetch(api(`/api/subjects/${subjectId}/planner/tasks`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ date: dateKey, title }),
+  });
+  if (res.status === 401) {
+    window.location.href = "login.html";
+    return;
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.message || "Erro ao criar meta");
+    return;
+  }
+  if (input) input.value = "";
+  await loadWeeklyPlanner();
+}
+
+async function loadHoursStats() {
+  const dateStr = weeklyState.weekStart.toISOString();
+  const [week, month, year] = await Promise.all([
+    fetch(api(`/api/subjects/${subjectId}/planner/stats?period=week&date=${encodeURIComponent(dateStr)}`), { headers: authHeaders() }).then(r => r.ok ? r.json() : null),
+    fetch(api(`/api/subjects/${subjectId}/planner/stats?period=month&date=${encodeURIComponent(dateStr)}`), { headers: authHeaders() }).then(r => r.ok ? r.json() : null),
+    fetch(api(`/api/subjects/${subjectId}/planner/stats?period=year&date=${encodeURIComponent(dateStr)}`), { headers: authHeaders() }).then(r => r.ok ? r.json() : null),
+  ]);
+
+  const fmtH = (n) => `${(Math.round((Number(n) || 0) * 10) / 10).toString()}h`;
+  const fmtAvg = (n) => `média ${fmtH(n)}/dia`;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  if (week) {
+    set("stats-week-total", fmtH(week.total));
+    set("stats-week-avg", fmtAvg(week.avg));
+  }
+  if (month) {
+    set("stats-month-total", fmtH(month.total));
+    set("stats-month-avg", fmtAvg(month.avg));
+  }
+  if (year) {
+    set("stats-year-total", fmtH(year.total));
+    set("stats-year-avg", fmtAvg(year.avg));
   }
 }
 

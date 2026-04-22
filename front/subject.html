@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="api-base" content="">
   <title>Matéria - StudyFlow</title>
-  <link rel="stylesheet" href="css/style.css">
-  <script src="js/env.js"></script>
-  <script src="js/config.js"></script>
+  <link rel="stylesheet" href="css/style.css?v=20260421-6">
+  <script src="js/env.js?v=20260421-6"></script>
+  <script src="js/config.js?v=20260421-6"></script>
 </head>
 <body>
 
@@ -162,6 +162,10 @@
                   <span class="stat-mini-label">Média Aprovação</span>
                 </div>
               </div>
+              <div style="display:flex; gap: 10px; margin-top: 14px;">
+                <button class="btn btn-primary btn-sm" onclick="openTestModal()">+ Adicionar teste</button>
+                <button class="btn btn-secondary btn-sm" onclick="openTestsListModal()">Ver testes</button>
+              </div>
             </div>
           </div>
         </div>
@@ -240,6 +244,12 @@
             </div>
             <div id="cal-grid" class="cal-grid"></div>
           </div>
+          <div class="card" id="day-activities-card">
+            <div class="card-header">
+              <h3 class="card-title" id="day-activities-title">Atividades do dia</h3>
+            </div>
+            <div id="day-activities" class="day-activities-list"></div>
+          </div>
           <div class="activities-list-section">
             <h2 class="section-title">📋 Próximas Atividades</h2>
             <div id="reminders" class="reminders-grid"></div>
@@ -251,13 +261,34 @@
         <div class="weekly-container">
           <div class="weekly-header">
             <div style="display:flex; gap: 15px; align-items: center;">
-              <button class="nav-btn" onclick="changeWeek(-1)">◀</button>
-              <span id="weekly-range-label" class="range-label"></span>
-              <button class="nav-btn" onclick="changeWeek(1)">▶</button>
+              <button class="nav-btn" onclick="plannerChangeWeek(-1)">◀</button>
+              <span id="planner-week-label" class="range-label"></span>
+              <button class="nav-btn" onclick="plannerChangeWeek(1)">▶</button>
+            </div>
+            <div style="display:flex; gap: 10px; align-items: center;">
+              <button class="btn btn-secondary" onclick="plannerGoToday()">Hoje</button>
             </div>
           </div>
-          
-          <div id="weekly-agenda-grid" class="weekly-grid"></div>
+
+          <div class="weekly-stats">
+            <div class="weekly-stat">
+              <div class="weekly-stat-title">Semana</div>
+              <div class="weekly-stat-value" id="stats-week-total">0h</div>
+              <div class="weekly-stat-sub" id="stats-week-avg">média 0h/dia</div>
+            </div>
+            <div class="weekly-stat">
+              <div class="weekly-stat-title">Mês</div>
+              <div class="weekly-stat-value" id="stats-month-total">0h</div>
+              <div class="weekly-stat-sub" id="stats-month-avg">média 0h/dia</div>
+            </div>
+            <div class="weekly-stat">
+              <div class="weekly-stat-title">Ano</div>
+              <div class="weekly-stat-value" id="stats-year-total">0h</div>
+              <div class="weekly-stat-sub" id="stats-year-avg">média 0h/dia</div>
+            </div>
+          </div>
+
+          <div id="planner-week-grid" class="weekly-grid"></div>
         </div>
       </div>
     </div>
@@ -290,6 +321,44 @@
     </div>
     <div class="modal-body">
       <div id="flashcards-manage-list" class="flashcards-manage-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tests-modal" class="modal-backdrop" style="display:none">
+  <div class="modal" style="max-width: 820px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="tests-modal-title">📊 Testes</h3>
+      <button class="modal-close" onclick="closeTestsModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="tm-edit-id" value="">
+      <div class="grid-2">
+        <div class="input-group">
+          <label class="input-label">Título</label>
+          <input type="text" id="tm-title" class="input" placeholder="Ex: Simulado 1">
+        </div>
+        <div class="input-group">
+          <label class="input-label">Data</label>
+          <input type="datetime-local" id="tm-date" class="input">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="input-group">
+          <label class="input-label">Acertos</label>
+          <input type="number" id="tm-correct" class="input" min="0" step="1" placeholder="0">
+        </div>
+        <div class="input-group">
+          <label class="input-label">Total</label>
+          <input type="number" id="tm-total" class="input" min="1" step="1" placeholder="10">
+        </div>
+      </div>
+      <div style="display:flex; gap: 10px; justify-content: flex-end;">
+        <button class="btn btn-secondary" onclick="closeTestsModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="submitTestModal()">✓ Salvar</button>
+      </div>
+      <div style="height: 1px; background: var(--border-primary); margin: 18px 0;"></div>
+      <div id="tests-list" class="tests-list"></div>
     </div>
   </div>
 </div>
@@ -342,6 +411,12 @@
       <label for="am-tags">Tags</label>
       <input id="am-tags" class="input" placeholder="Ex: importante, capítulo 3">
     </div>
+    <div class="activity-form-group">
+      <label class="checkbox-row">
+        <input type="checkbox" id="am-done">
+        <span>Concluída</span>
+      </label>
+    </div>
     <div class="activity-modal-footer">
       <button class="btn btn-secondary" onclick="closeActivityModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="submitActivityModal()">✓ Salvar</button>
@@ -349,6 +424,6 @@
   </div>
 </div>
 
-<script src="js/subject.js"></script>
+<script src="js/subject.js?v=20260421-6"></script>
 </body>
 </html>

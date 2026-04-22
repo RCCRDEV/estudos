@@ -11,7 +11,7 @@ const PlannerSchema = new mongoose.Schema(
         title: String,
         status: { 
           type: String, 
-          enum: ["concluido", "nao feito", "em andamento", "procrastinado"], 
+          enum: ["concluido", "nao feito", "em andamento", "procrastinado", "aguardando", "cancelado"], 
           default: "nao feito" 
         }
       }

@@ -45,6 +45,7 @@ router.delete("/:id", async (req, res) => {
     await Note.deleteMany({ subjectId: id, userId: req.user.id });
     await Video.deleteMany({ subjectId: id, userId: req.user.id });
     await Activity.deleteMany({ subjectId: id, userId: req.user.id });
+    await TestResult.deleteMany({ subjectId: id, userId: req.user.id });
     res.json({ ok: true });
   } catch (e) {
     console.error("Erro excluir matéria", e);
@@ -223,16 +224,18 @@ function googleCalendarLink({ title, details, startAt, endAt }) {
 
 router.post("/:id/activities", async (req, res) => {
   try {
-    const { title, description, startAt, endAt, tags } = req.body;
+    const { title, description, startAt, endAt, tags, type, done } = req.body;
     if (!title || !startAt || !endAt) return res.status(400).json({ message: "Dados insuficientes" });
     const link = googleCalendarLink({ title, details: description, startAt, endAt });
     const item = await Activity.create({
       userId: req.user.id,
       subjectId: req.params.id,
       title,
+      type: type || "atividade",
       description,
       startAt,
       endAt,
+      done: Boolean(done),
       googleLink: link,
       tags: Array.isArray(tags) ? tags : [],
     });
@@ -245,12 +248,21 @@ router.post("/:id/activities", async (req, res) => {
 
 router.put("/:id/activities/:activityId", async (req, res) => {
   try {
-    const { title, description, startAt, endAt, tags } = req.body;
+    const { title, description, startAt, endAt, tags, type, done } = req.body;
     if (!title || !startAt || !endAt) return res.status(400).json({ message: "Dados insuficientes" });
     const link = googleCalendarLink({ title, details: description, startAt, endAt });
     const item = await Activity.findOneAndUpdate(
       { _id: req.params.activityId, userId: req.user.id, subjectId: req.params.id },
-      { title, description, startAt, endAt, googleLink: link, ...(Array.isArray(tags) ? { tags } : {}) },
+      {
+        title,
+        description,
+        startAt,
+        endAt,
+        googleLink: link,
+        ...(Array.isArray(tags) ? { tags } : {}),
+        ...(type ? { type } : {}),
+        ...(typeof done === "boolean" ? { done } : {}),
+      },
       { new: true }
     );
     if (!item) return res.status(404).json({ message: "Atividade não encontrada" });
@@ -329,13 +341,14 @@ router.get("/:id/tests", async (req, res) => {
   try {
     const items = await TestResult.find({ userId: req.user.id, subjectId: req.params.id })
       .sort({ createdAt: -1 })
-      .limit(10);
+      .limit(50);
     const agg = await TestResult.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(req.user.id), subjectId: new mongoose.Types.ObjectId(req.params.id) } },
       { $group: { _id: null, avg: { $avg: "$percentage" }, count: { $sum: 1 } } },
     ]);
     const avg = agg.length ? Math.round(agg[0].avg) : 0;
-    res.json({ items, avg });
+    const count = agg.length ? agg[0].count : 0;
+    res.json({ items, avg, count });
   } catch (e) {
     console.error("Erro listar testes", e);
     res.status(500).json({ message: "Erro ao listar testes" });
@@ -344,7 +357,7 @@ router.get("/:id/tests", async (req, res) => {
 
 router.post("/:id/tests", async (req, res) => {
   try {
-    const { correct, total } = req.body;
+    const { correct, total, title, takenAt } = req.body;
     if (typeof correct !== "number" || typeof total !== "number" || total <= 0) {
       return res.status(400).json({ message: "Dados inválidos" });
     }
@@ -352,14 +365,62 @@ router.post("/:id/tests", async (req, res) => {
     const item = await TestResult.create({
       userId: req.user.id,
       subjectId: req.params.id,
+      title: typeof title === "string" ? title : "",
       correct,
       total,
       percentage,
+      ...(takenAt ? { takenAt } : {}),
     });
     res.status(201).json(item);
   } catch (e) {
     console.error("Erro salvar teste", e);
     res.status(500).json({ message: "Erro ao salvar teste" });
+  }
+});
+
+router.put("/:id/tests/:testId", async (req, res) => {
+  try {
+    const { correct, total, title, takenAt } = req.body;
+    const existing = await TestResult.findOne({ _id: req.params.testId, userId: req.user.id, subjectId: req.params.id });
+    if (!existing) return res.status(404).json({ message: "Teste não encontrado" });
+
+    const nextCorrect = typeof correct === "number" ? correct : existing.correct;
+    const nextTotal = typeof total === "number" ? total : existing.total;
+    if (typeof nextCorrect !== "number" || typeof nextTotal !== "number" || nextTotal <= 0) {
+      return res.status(400).json({ message: "Dados inválidos" });
+    }
+    if (nextCorrect < 0 || nextCorrect > nextTotal) {
+      return res.status(400).json({ message: "Dados inválidos" });
+    }
+
+    const update = {
+      correct: nextCorrect,
+      total: nextTotal,
+      percentage: Math.round((nextCorrect / nextTotal) * 100),
+      ...(typeof title === "string" ? { title } : {}),
+      ...(takenAt ? { takenAt } : {}),
+    };
+
+    const item = await TestResult.findOneAndUpdate(
+      { _id: req.params.testId, userId: req.user.id, subjectId: req.params.id },
+      update,
+      { new: true }
+    );
+    if (!item) return res.status(404).json({ message: "Teste não encontrado" });
+    res.json(item);
+  } catch (e) {
+    console.error("Erro atualizar teste", e);
+    res.status(500).json({ message: "Erro ao atualizar teste" });
+  }
+});
+
+router.delete("/:id/tests/:testId", async (req, res) => {
+  try {
+    await TestResult.deleteOne({ _id: req.params.testId, userId: req.user.id, subjectId: req.params.id });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Erro excluir teste", e);
+    res.status(500).json({ message: "Erro ao excluir teste" });
   }
 });
 
@@ -394,6 +455,22 @@ router.get("/:id/planner", async (req, res) => {
   }
 });
 
+function parsePlannerDate(input) {
+  if (!input) return null;
+  if (typeof input === "string") {
+    const m = input.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+  }
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 router.post("/:id/planner/hours", async (req, res) => {
   try {
     const { date, hours } = req.body;
@@ -402,8 +479,8 @@ router.post("/:id/planner/hours", async (req, res) => {
 
     if (!date || hours === undefined) return res.status(400).json({ message: "Dados incompletos" });
 
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
+    const d = parsePlannerDate(date);
+    if (!d) return res.status(400).json({ message: "Data inválida" });
 
     const result = await Planner.findOneAndUpdate(
       { userId, subjectId, date: d },
@@ -426,8 +503,8 @@ router.post("/:id/planner/tasks", async (req, res) => {
 
     if (!date || !title) return res.status(400).json({ message: "Dados incompletos" });
 
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
+    const d = parsePlannerDate(date);
+    if (!d) return res.status(400).json({ message: "Data inválida" });
 
     const result = await Planner.findOneAndUpdate(
       { userId, subjectId, date: d },
@@ -444,17 +521,23 @@ router.post("/:id/planner/tasks", async (req, res) => {
 
 router.put("/:id/planner/tasks/:taskId", async (req, res) => {
   try {
-    const { date, status } = req.body;
+    const { status } = req.body;
     const { taskId } = req.params;
     const userId = req.user.id;
+    const subjectId = req.params.id;
 
-    const result = await Planner.findOneAndUpdate(
-      { userId, date: new Date(date), "tasks._id": taskId },
-      { $set: { "tasks.$.status": status } },
-      { new: true }
-    );
+    if (!status) return res.status(400).json({ message: "Status é obrigatório" });
+    const allowed = new Set(["concluido", "nao feito", "em andamento", "procrastinado", "aguardando", "cancelado"]);
+    if (!allowed.has(String(status))) return res.status(400).json({ message: "Status inválido" });
 
-    res.json(result);
+    const doc = await Planner.findOne({ userId, subjectId, "tasks._id": taskId });
+    if (!doc) return res.status(404).json({ message: "Tarefa não encontrada" });
+
+    const task = doc.tasks.id(taskId);
+    if (!task) return res.status(404).json({ message: "Tarefa não encontrada" });
+    task.status = String(status);
+    await doc.save();
+    res.json(doc);
   } catch (e) {
     console.error("Erro ao atualizar status", e);
     res.status(500).json({ message: "Erro ao atualizar status" });
@@ -463,20 +546,79 @@ router.put("/:id/planner/tasks/:taskId", async (req, res) => {
 
 router.delete("/:id/planner/tasks/:taskId", async (req, res) => {
   try {
-    const { date } = req.query;
     const { taskId } = req.params;
     const userId = req.user.id;
+    const subjectId = req.params.id;
 
-    const result = await Planner.findOneAndUpdate(
-      { userId, date: new Date(date) },
-      { $pull: { tasks: { _id: taskId } } },
-      { new: true }
-    );
+    const doc = await Planner.findOne({ userId, subjectId, "tasks._id": taskId });
+    if (!doc) return res.status(404).json({ message: "Tarefa não encontrada" });
 
-    res.json(result);
+    const task = doc.tasks.id(taskId);
+    if (!task) return res.status(404).json({ message: "Tarefa não encontrada" });
+    task.deleteOne();
+    await doc.save();
+    res.json(doc);
   } catch (e) {
     console.error("Erro ao excluir tarefa", e);
     res.status(500).json({ message: "Erro ao excluir tarefa" });
+  }
+});
+
+function getWeekStartLocal(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  start.setDate(start.getDate() - day);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+router.get("/:id/planner/stats", async (req, res) => {
+  try {
+    const { period, date } = req.query;
+    const subjectId = new mongoose.Types.ObjectId(req.params.id);
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const base = date ? new Date(date) : new Date();
+    if (Number.isNaN(base.getTime())) return res.status(400).json({ message: "Data inválida" });
+
+    let start;
+    let end;
+    const p = String(period || "week");
+    if (p === "month") {
+      start = new Date(base.getFullYear(), base.getMonth(), 1);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
+    } else if (p === "year") {
+      start = new Date(base.getFullYear(), 0, 1);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(base.getFullYear(), 11, 31);
+      end.setHours(23, 59, 59, 999);
+    } else {
+      start = getWeekStartLocal(base);
+      end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+    }
+
+    const agg = await Planner.aggregate([
+      { $match: { userId, subjectId, date: { $gte: start, $lte: end } } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$hours" },
+          daysWithHours: { $sum: { $cond: [{ $gt: ["$hours", 0] }, 1, 0] } },
+        },
+      },
+    ]);
+    const total = agg.length ? agg[0].total : 0;
+    const daysWithHours = agg.length ? agg[0].daysWithHours : 0;
+    const avg = daysWithHours > 0 ? total / daysWithHours : 0;
+
+    res.json({ period: p, start, end, total: Number(total || 0), daysWithHours, avg: Number(avg || 0) });
+  } catch (e) {
+    console.error("Erro stats planner", e);
+    res.status(500).json({ message: "Erro ao buscar estatísticas" });
   }
 });
 
